@@ -21,9 +21,40 @@
           <button id="history-toggle" class="chip" aria-pressed="false">
             History
           </button>
+          <button id="graph-toggle" class="chip" aria-pressed="false">Graph</button>
         </div>
         <span id="mode" class="mode"></span>
       </div>
+      <section class="graph" id="graph" aria-label="Graph" hidden>
+        <ol class="fn-list" id="fn-list"></ol>
+        <div class="fn-tools" id="fn-tools" hidden>
+          <button data-insert="x" class="x-key" title="The variable x">x</button>
+          <button id="fn-backspace" class="backspace" aria-label="Delete" title="Delete">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M9 5h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-6-7z" />
+              <path d="M12 9.5l5 5M17 9.5l-5 5" />
+            </svg>
+          </button>
+          <button id="fn-done" class="chip done">Draw</button>
+        </div>
+        <div class="plot" id="plot">
+          <canvas id="graph-canvas" class="graph-canvas" role="img"
+            aria-label="Graph of the functions above"></canvas>
+          <div class="graph-toolbar">
+            <button id="zoom-out" aria-label="Zoom out" title="Zoom out">−</button>
+            <button id="zoom-in" aria-label="Zoom in" title="Zoom in">+</button>
+            <button id="zoom-std" title="x from −10 to 10">Std</button>
+            <button id="zoom-trig" title="Two full turns across">Trig</button>
+            <button id="graph-angle" title="Angle unit for sin, cos and tan">Deg</button>
+            <button id="table-toggle" aria-pressed="false">Table</button>
+          </div>
+          <p class="trace" id="trace" aria-live="polite"></p>
+          <div class="table-wrap" id="table-wrap" hidden>
+            <table class="value-table" id="value-table"></table>
+          </div>
+        </div>
+      </section>
+      <div class="screen" id="screen">
       <div class="expression" id="expression" aria-hidden="true"></div>
       <output class="display" id="display" aria-live="polite">0</output>
       <div class="edit-row">
@@ -34,6 +65,7 @@
             <path d="M12 9.5l5 5M17 9.5l-5 5" />
           </svg>
         </button>
+      </div>
       </div>
       <div class="sci" id="sci" hidden>
         <div class="angle" role="group" aria-label="Angle unit">
@@ -136,6 +168,7 @@
       </section>
     </main>
     <script src="calculator.js"></script>
+    <script src="graph.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

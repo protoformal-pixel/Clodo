@@ -274,6 +274,8 @@
       case "var":
         return env.memory?.[node.name] ?? 0;
       case "x":
+        // x only has a value when graphing.
+        if (env.x === undefined) throw syntaxError();
         return env.x;
       case "neg":
         return -evaluate(node.arg, env);

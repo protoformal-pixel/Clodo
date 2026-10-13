@@ -25,6 +25,15 @@ A simple calculator that runs in the browser with no dependencies or build step.
   expression's answer (or the answer on screen, or Ans if nothing is typed), shown as
   `2×3→A = 6`. Tap a letter to use it in an expression, like `2A+1`. Each letter shows
   its value, and memory is kept after closing the app; **Clear** resets all to 0.
+- **Graphs:** press **Graph** to switch to graph mode. Tap **y1**, **y2** or **y3** to type a
+  function of `x` with the keypad (the **x** key is above it), then **Draw** (or `=`).
+  - Drag to move, pinch or scroll to zoom, or use **−** **+**. **Std** shows x from −10 to
+    10; **Trig** shows two full turns for sin/cos/tan. **Deg/Rad** sets the angle unit.
+  - Tap the graph to trace: the values of each function at that x appear underneath
+    (`←` `→` move the trace on a keyboard).
+  - **Table** lists the values at each grid line in view.
+  - Tap a colour square to hide or show that function. Functions, the view and the
+    settings are kept after closing the app.
 - **Fixing typos:** **⌫** deletes the last key (`sin(` goes in one press). Tap between
   two parts of the expression (or use `←` `→`) to type or delete there. After a result,
   tap it, or press **⌫** or an arrow, to go back to the expression and change it.
@@ -50,5 +59,6 @@ Files:
   code, so it can be tested.
 - `app.js`: connects the logic to the buttons and keyboard.
 - `index.html`, `style.css`: the page layout and styles.
-- `calculator.test.js`: unit tests.
+- `graph.js`: graph helpers (view, axis ticks, sampling curves, drawing), no page code.
+- `calculator.test.js`, `graph.test.js`: unit tests.
 - `manifest.webmanifest`, `sw.js`, `icons/`: make it installable and usable offline.

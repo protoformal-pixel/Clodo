@@ -1,4 +1,15 @@
+[hidden] {
+  display: none !important;
+}
+
 :root {
+  /* Graph series: the first three slots of a palette checked for colour
+     blindness on this surface; text labels and the table back them up. */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --graph-grid: #ececf0;
+  --graph-axis: #8e8e93;
   --bg: #f2f2f5;
   --panel: #ffffff;
   --key: #e9e9ee;
@@ -17,6 +28,11 @@
     --key-text: #ffffff;
     --fn: #a5a5aa;
     --muted: #8e8e93;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --graph-grid: #2c2c2e;
+    --graph-axis: #8e8e93;
   }
   .fn {
     color: #000;
@@ -398,4 +414,183 @@ button:focus-visible {
 /* While STO waits for a letter, the letters are highlighted. */
 .sci.is-storing [data-var] {
   box-shadow: inset 0 0 0 2px var(--op);
+}
+
+/* Graph mode */
+
+.graph {
+  margin-top: 8px;
+}
+
+.fn-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fn-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 4px 10px 4px 8px;
+  border-radius: 12px;
+  background: var(--key);
+}
+
+.fn-row.is-editing {
+  box-shadow: inset 0 0 0 2px var(--op);
+}
+
+.fn-swatch {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  aspect-ratio: auto;
+  border-radius: 6px;
+  background: var(--fn-color);
+}
+
+/* Hidden function: an outline instead of a filled swatch. */
+.fn-swatch[aria-pressed="false"] {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px var(--fn-color);
+}
+
+.fn-name {
+  flex: none;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.fn-expr {
+  flex: 1;
+  min-width: 0;
+  color: var(--key-text);
+  font-size: 1.15rem;
+  overflow-wrap: anywhere;
+  cursor: text;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.fn-expr .placeholder {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.fn-error {
+  flex: none;
+  color: var(--op);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.fn-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.x-key {
+  width: 64px;
+  height: 40px;
+  aspect-ratio: auto;
+  border-radius: 999px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-style: italic;
+  font-size: 1.4rem;
+}
+
+.fn-tools .done {
+  margin-left: auto;
+  padding: 8px 20px;
+  background: var(--op);
+  color: var(--op-text);
+}
+
+.graph-canvas {
+  display: block;
+  width: 100%;
+  height: 280px;
+  margin-top: 10px;
+  border-radius: 12px;
+  touch-action: none; /* the graph handles its own drag and pinch */
+  cursor: crosshair;
+}
+
+.graph-toolbar {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.graph-toolbar button {
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+  aspect-ratio: auto;
+  border-radius: 999px;
+  font-size: 0.95rem;
+}
+
+.graph-toolbar button[aria-pressed="true"] {
+  background: var(--op);
+  color: var(--op-text);
+}
+
+.trace {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  min-height: 1.4em;
+  margin: 10px 2px 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.trace .val {
+  color: var(--key-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: var(--fn-color);
+}
+
+.table-wrap {
+  max-height: 280px;
+  margin-top: 10px;
+  overflow: auto;
+}
+
+.value-table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--key-text);
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.value-table th,
+.value-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--key);
+  text-align: right;
+}
+
+.value-table th {
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+  color: var(--muted);
+  font-weight: 600;
 }
