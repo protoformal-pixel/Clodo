@@ -5,35 +5,64 @@
   const C = window.Calculator;
   const displayEl = document.getElementById("display");
   const expressionEl = document.getElementById("expression");
+  const modeEl = document.getElementById("mode");
+  const sciEl = document.getElementById("sci");
+  const sciToggle = document.getElementById("sci-toggle");
+  const invBtn = document.getElementById("inv");
   const historyList = document.getElementById("history-list");
   const historyEmpty = document.getElementById("history-empty");
   const clearHistoryBtn = document.getElementById("clear-history");
-  const symbols = { "+": "+", "-": "−", "*": "×", "/": "÷" };
+  const symbols = { "+": "+", "-": "−", "*": "×", "/": "÷", "^": "^", root: "ʸ√" };
   const HISTORY_KEY = "calculator-history";
+  const SETTINGS_KEY = "calculator-settings";
   let state = C.createState();
   let history = loadHistory();
+  let settings = loadSettings(); // { sci: boolean, angle: "deg" | "rad" }
+  let inverse = false;
 
-  // History is kept in this browser only. Storage can be unavailable
-  // (e.g. private browsing), so every access is guarded.
+  // History and settings are kept in this browser only. Storage can be
+  // unavailable (e.g. private browsing), so every access is guarded.
+  function load(key) {
+    try {
+      return JSON.parse(localStorage.getItem(key));
+    } catch {
+      return null;
+    }
+  }
+
+  function save(key, value) {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch {
+      // Not saved; everything still works until the page is closed.
+    }
+  }
+
   function loadHistory() {
-    try {
-      const saved = JSON.parse(localStorage.getItem(HISTORY_KEY));
-      return Array.isArray(saved) ? saved.slice(0, C.HISTORY_LIMIT) : [];
-    } catch {
-      return [];
-    }
+    const saved = load(HISTORY_KEY);
+    return Array.isArray(saved) ? saved.slice(0, C.HISTORY_LIMIT) : [];
   }
 
-  function saveHistory() {
-    try {
-      localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-    } catch {
-      // Not saved; history still works until the page is closed.
-    }
+  function loadSettings() {
+    const saved = load(SETTINGS_KEY) || {};
+    return { sci: saved.sci === true, angle: saved.angle === "rad" ? "rad" : "deg" };
   }
 
+  // Internal tokens such as "*" and "root" shown as their key symbols.
   function prettify(expression) {
-    return expression.replace(/ ([-+*/]) /g, (_, op) => ` ${symbols[op]} `);
+    return expression.replace(
+      / (\+|-|\*|\/|\^|root) /g,
+      (_, op) => ` ${symbols[op]} `
+    );
+  }
+
+  // With Inv on, keys such as sin act as their inverse (sin⁻¹).
+  function fnOf(btn) {
+    return (inverse && btn.dataset.invFn) || btn.dataset.fn;
+  }
+
+  function operatorOf(btn) {
+    return (inverse && btn.dataset.invOperator) || btn.dataset.operator;
   }
 
   function renderHistory() {
@@ -59,14 +88,33 @@
     clearHistoryBtn.hidden = history.length === 0;
   }
 
+  function renderModes() {
+    sciEl.hidden = !settings.sci;
+    sciToggle.setAttribute("aria-pressed", settings.sci);
+    invBtn.setAttribute("aria-pressed", inverse);
+    document.querySelectorAll("[data-angle]").forEach((btn) => {
+      btn.setAttribute("aria-pressed", btn.dataset.angle === settings.angle);
+    });
+    document.querySelectorAll("[data-inv-label]").forEach((btn) => {
+      if (!btn.dataset.label) btn.dataset.label = btn.textContent.trim();
+      btn.textContent = inverse ? btn.dataset.invLabel : btn.dataset.label;
+    });
+    modeEl.textContent = settings.sci
+      ? [settings.angle.toUpperCase(), inverse && "INV"].filter(Boolean).join(" ")
+      : "";
+  }
+
   function render() {
     displayEl.textContent = state.display;
-    expressionEl.textContent = prettify(state.chain.join(" ") + " ");
+    // Shrink long numbers such as π so they stay on one line.
+    const length = state.display.length;
+    displayEl.style.fontSize =
+      length > 10 ? `${Math.max(1.5, (3 * 10) / length)}rem` : "";
+    const tokens = state.label ? [...state.chain, state.label] : state.chain;
+    expressionEl.textContent = prettify(tokens.join(" ") + " ");
+    const pending = state.operatorPending && state.ops[state.ops.length - 1];
     document.querySelectorAll("[data-operator]").forEach((btn) => {
-      btn.classList.toggle(
-        "active",
-        state.waitingForOperand && btn.dataset.operator === state.operator
-      );
+      btn.classList.toggle("active", pending === operatorOf(btn));
     });
   }
 
@@ -78,6 +126,12 @@
       case "operator":
         state = C.setOperator(state, value);
         break;
+      case "function":
+        state = C.applyFunction(state, value, settings.angle);
+        break;
+      case "constant":
+        state = C.insertConstant(state, value);
+        break;
       case "decimal":
         state = C.inputDecimal(state);
         break;
@@ -85,7 +139,7 @@
         state = C.equals(state);
         if (state.completed) {
           history = C.addToHistory(history, state.completed);
-          saveHistory();
+          save(HISTORY_KEY, history);
           renderHistory();
         }
         break;
@@ -108,12 +162,39 @@
     render();
   }
 
+  function pressKey(btn) {
+    const { dataset } = btn;
+    if (dataset.digit) handle("digit", dataset.digit);
+    else if (dataset.operator) handle("operator", operatorOf(btn));
+    else if (dataset.fn) handle("function", fnOf(btn));
+    else if (dataset.constant) handle("constant", dataset.constant);
+    else if (dataset.action) handle(dataset.action);
+  }
+
   document.querySelector(".keys").addEventListener("click", (event) => {
     const btn = event.target.closest("button");
+    if (btn) pressKey(btn);
+  });
+
+  sciEl.addEventListener("click", (event) => {
+    const btn = event.target.closest("button");
     if (!btn) return;
-    if (btn.dataset.digit) handle("digit", btn.dataset.digit);
-    else if (btn.dataset.operator) handle("operator", btn.dataset.operator);
-    else handle(btn.dataset.action);
+    if (btn === invBtn) {
+      inverse = !inverse;
+    } else if (btn.dataset.angle) {
+      settings.angle = btn.dataset.angle;
+      save(SETTINGS_KEY, settings);
+    } else {
+      pressKey(btn);
+    }
+    renderModes();
+    render();
+  });
+
+  sciToggle.addEventListener("click", () => {
+    settings.sci = !settings.sci;
+    save(SETTINGS_KEY, settings);
+    renderModes();
   });
 
   historyList.addEventListener("click", (event) => {
@@ -123,11 +204,25 @@
 
   clearHistoryBtn.addEventListener("click", () => {
     history = [];
-    saveHistory();
+    save(HISTORY_KEY, history);
     renderHistory();
   });
 
+  // Letter shortcuts for scientific keys; they follow Inv like the buttons.
+  const shortcuts = {
+    s: '[data-fn="sin"]',
+    c: '[data-fn="cos"]',
+    t: '[data-fn="tan"]',
+    l: '[data-fn="log"]',
+    n: '[data-fn="ln"]',
+    "^": '[data-operator="^"]',
+    "!": '[data-fn="factorial"]',
+    p: '[data-constant="pi"]',
+  };
+
   document.addEventListener("keydown", (event) => {
+    // Leave browser shortcuts such as Ctrl+C alone.
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
     const { key } = event;
     if (/^[0-9]$/.test(key)) handle("digit", key);
     else if (["+", "-", "*", "/"].includes(key)) handle("operator", key);
@@ -136,10 +231,13 @@
     else if (key === "Backspace") handle("backspace");
     else if (key === "Escape") handle("clear");
     else if (key === "%") handle("percent");
+    else if (key === "r") handle("function", "sqrt");
+    else if (shortcuts[key]) pressKey(document.querySelector(shortcuts[key]));
     else return;
     event.preventDefault();
   });
 
+  renderModes();
   render();
   renderHistory();
 })();
