@@ -665,3 +665,39 @@ button:focus-visible {
   color: var(--muted);
   font-size: 1.2rem;
 }
+
+/* Fractions */
+
+.sd {
+  height: 32px;
+  margin-left: auto;
+  padding: 0 12px;
+  aspect-ratio: auto;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+/* 7/2 as a stacked fraction; −3 1/2 as a mixed number. */
+.display .frac {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  margin-left: 0.08em;
+  font-size: 0.62em;
+  line-height: 1.05;
+  vertical-align: middle;
+}
+
+.display .frac .num {
+  padding: 0 0.15em 0.05em;
+  border-bottom: 0.06em solid currentColor;
+}
+
+.display .frac .den {
+  padding: 0.05em 0.15em 0;
+}
+
+.display .whole {
+  margin-right: 0.12em;
+}

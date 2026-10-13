@@ -60,6 +60,47 @@
   }
 
   // ---------------------------------------------------------------------
+  // Fractions
+
+  // The fraction n/d (d > 0, lowest terms) equal to value, if there is one
+  // with a denominator up to 9999, found by continued fractions. Answers
+  // like √2 or π have no such fraction and stay decimals; the tolerance is
+  // far tighter than how close any small fraction gets to them.
+  const MAX_DENOMINATOR = 9999;
+
+  function toFraction(value) {
+    if (!Number.isFinite(value) || Math.abs(value) >= 1e10) return null;
+    const sign = value < 0 ? -1 : 1;
+    const x = Math.abs(value);
+    let [h0, h1] = [0, 1]; // numerators of the last two convergents
+    let [k0, k1] = [1, 0]; // denominators
+    let rest = x;
+    for (let i = 0; i < 40; i++) {
+      const a = Math.floor(rest);
+      [h0, h1] = [h1, a * h1 + h0];
+      [k0, k1] = [k1, a * k1 + k0];
+      if (k1 > MAX_DENOMINATOR) return null;
+      if (Math.abs(x - h1 / k1) <= 1e-12 * Math.max(1, x)) return { n: sign * h1, d: k1 };
+      const frac = rest - a;
+      if (frac < 1e-15) return null;
+      rest = 1 / frac;
+    }
+    return null;
+  }
+
+  // How an answer is shown: "dec" 3.5, "frac" 7/2, or "mixed" 3 1/2.
+  // Whole numbers and answers with no fraction always show as decimals.
+  function formatResult(value, style = "dec") {
+    const f = style === "dec" ? null : toFraction(value);
+    if (!f || f.d === 1) return format(value);
+    if (style === "mixed" && Math.abs(f.n) > f.d) {
+      const whole = Math.trunc(Math.abs(f.n) / f.d);
+      return `${f.n < 0 ? "-" : ""}${whole} ${Math.abs(f.n) % f.d}/${f.d}`;
+    }
+    return `${f.n}/${f.d}`;
+  }
+
+  // ---------------------------------------------------------------------
   // Tokens
 
   // Functions open a bracket as part of the token, as on a Casio: "sin(".
@@ -402,9 +443,19 @@
     };
   }
 
-  // Insert a number given as text, e.g. a result picked from history.
+  // Insert a number given as text, e.g. a result picked from history:
+  // 2.5, -1.2e+21, 7/2 or 3 1/2.
   function insertNumber(state, text) {
     if (state.result !== null) state = { ...editing(state), tokens: [], cursor: null };
+    const fraction = text.match(/^(-?)(?:(\d+) )?(\d+)\/(\d+)$/);
+    if (fraction) {
+      // In brackets, so 2×(7/2) stays one number: (7/2), (−(3+1/2)).
+      const [, minus, whole, n, d] = fraction;
+      let tokens = [...n, "/", ...d];
+      if (whole) tokens = ["(", ...whole, "+", ...tokens, ")"];
+      tokens = ["(", ...(minus ? ["neg"] : []), ...tokens, ")"];
+      return tokens.reduce(insert, state);
+    }
     let [mantissa, exponent] = text.split("e");
     const tokens = [];
     if (mantissa.startsWith("-")) {
@@ -454,13 +505,13 @@
     return setCursor(state, at + delta);
   }
 
-  function equals(state, angle = "deg") {
+  function equals(state, angle = "deg", style = "dec") {
     if (state.result !== null || state.tokens.length === 0) {
       return { ...state, completed: null };
     }
     try {
       const value = calculate(state.tokens, env(state, angle));
-      const result = format(value);
+      const result = formatResult(value, style);
       const expression = toText(state.tokens, state.ans);
       return {
         ...state,
@@ -479,14 +530,20 @@
 
   // The answer so far while typing, or null if it is not ready or would
   // only repeat what is on screen.
-  function preview(state, angle = "deg") {
+  function preview(state, angle = "deg", style = "dec") {
     if (state.result !== null || state.error || !state.tokens.length) return null;
     if (state.tokens.every(isDigit)) return null;
     try {
-      return format(calculate(state.tokens, env(state, angle)));
+      return formatResult(calculate(state.tokens, env(state, angle)), style);
     } catch {
       return null;
     }
+  }
+
+  // S⇔D: show the answer on screen in another style.
+  function restyle(state, style) {
+    if (state.result === null) return state;
+    return { ...state, result: formatResult(state.ans, style) };
   }
 
   function env(state, angle) {
@@ -495,14 +552,14 @@
 
   // STO then a letter: work out the expression (or take the answer on
   // screen, or Ans if nothing is typed) and keep it in that letter.
-  function store(state, name, angle = "deg") {
+  function store(state, name, angle = "deg", style = "dec") {
     if (!VARIABLES.includes(name)) return state;
     let done;
     if (state.result !== null) {
       done = { ...state, completed: null }; // already in history
     } else {
       const tokens = state.tokens.length ? state.tokens : ["Ans"];
-      done = equals({ ...state, tokens, cursor: null }, angle);
+      done = equals({ ...state, tokens, cursor: null }, angle, style);
       if (done.error) return done;
     }
     const arrow = `→${name}`;
@@ -537,6 +594,9 @@
     moveCursor,
     equals,
     preview,
+    restyle,
+    toFraction,
+    formatResult,
     store,
     clearMemory,
     VARIABLES,
