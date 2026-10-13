@@ -25,6 +25,13 @@ A simple calculator that runs in the browser with no dependencies or build step.
   expression's answer (or the answer on screen, or Ans if nothing is typed), shown as
   `2×3→A = 6`. Tap a letter to use it in an expression, like `2A+1`. Each letter shows
   its value, and memory is kept after closing the app; **Clear** resets all to 0.
+- **Calculus:** the Sci panel has `∫dx`, `d/dx`, `Solve`, `,` and `x`, Casio style:
+  - `∫(x², 0, 3) = 9`: the area under x² from 0 to 3.
+  - `d/dx(x^3, 2) = 12`: the slope of x³ at x = 2.
+  - `Solve(x²−2, 1) = 1.41421356237`: the x where the expression is 0, searching from 1
+    (from 0 if left out). **Can't Solve** if there is no real answer.
+
+  Answers are numbers, worked out numerically to about 10 digits, as on a Casio.
 - **Graphs:** press **Graph** to switch to graph mode. Tap **y1**, **y2** or **y3** to type a
   function of `x` with the keypad (the **x** key is above it), then **Draw** (or `=`).
   - Drag to move, pinch or scroll to zoom, or use **−** **+**. **Std** shows x from −10 to
@@ -32,6 +39,10 @@ A simple calculator that runs in the browser with no dependencies or build step.
   - Tap the graph to trace: the values of each function at that x appear underneath
     (`←` `→` move the trace on a keyboard).
   - **Table** lists the values at each grid line in view.
+  - **G-Solv** row: **Root**, **Min**, **Max** and **Isect** (where two curves meet) find
+    points in view; tap again for the next one. **∫dx**: tap the lower and upper limits on
+    the graph to shade the area and get its value. Tap the function's name in the result
+    to switch to another function. Taps snap to round x values.
   - Tap a colour square to hide or show that function. Functions, the view and the
     settings are kept after closing the app.
 - **Fixing typos:** **⌫** deletes the last key (`sin(` goes in one press). Tap between
@@ -42,8 +53,9 @@ A simple calculator that runs in the browser with no dependencies or build step.
   reload; **Clear** empties it.
 - **Keyboard:** digits, `+ - * / ^ ( ) . ! %`, `Enter`/`=`, `Backspace`, `←` `→`, `Esc`
   (clear). Scientific: `s` `c` `t` sin/cos/tan, `l` log, `n` ln, `r` √, `p` π, `e`,
-  `a` Ans, Shift+`A`…`F` memory letters (after **STO**, Shift+letter stores). With **Inv**
-  on, `s` `c` `t` `l` `n` type the inverse functions.
+  `a` Ans, `x`, `i` ∫, `d` d/dx, `,` between values (the number pad's decimal key types
+  `.`), Shift+`A`…`F` memory letters (after **STO**, Shift+letter stores). With **Inv** on,
+  `s` `c` `t` `l` `n` type the inverse functions.
 - **Install it as an app:** open the GitHub Pages site, then
   - **Android (Chrome):** ⋮ menu → **Add to Home screen** → **Install**.
   - **iPhone (Safari):** Share button → **Add to Home Screen**.
@@ -59,6 +71,7 @@ Files:
   code, so it can be tested.
 - `app.js`: connects the logic to the buttons and keyboard.
 - `index.html`, `style.css`: the page layout and styles.
+- `calculus.js`: numerical integrals, derivatives, Solve, roots and extremes.
 - `graph.js`: graph helpers (view, axis ticks, sampling curves, drawing), no page code.
-- `calculator.test.js`, `graph.test.js`: unit tests.
+- `calculator.test.js`, `calculus.test.js`, `graph.test.js`: unit tests.
 - `manifest.webmanifest`, `sw.js`, `icons/`: make it installable and usable offline.

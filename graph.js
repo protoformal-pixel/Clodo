@@ -115,7 +115,8 @@
   // Draw grid, axes, curves and the trace line.
   //   curves: [{ f, color }]
   //   colors: { surface, grid, axis, label }
-  function draw(ctx, width, height, view, curves, colors, traceX) {
+  //   shade: { f, a, b, color } fills between the curve and y = 0 from a to b
+  function draw(ctx, width, height, view, curves, colors, traceX, shade) {
     const b = bounds(view, width, height);
     const X = (x) => (x - b.xmin) / view.sx;
     // Keep far-off points finite for the canvas.
@@ -178,6 +179,26 @@
       const py = Y(y);
       if (py < 8 || py > height - 8) continue;
       ctx.fillText(label(y, ty.step), labelX, py);
+    }
+
+    // Shaded area for ∫dx, under the curves.
+    if (shade) {
+      const lo = Math.min(shade.a, shade.b);
+      const hi = Math.max(shade.a, shade.b);
+      const n = Math.max(2, Math.ceil(Math.abs(X(hi) - X(lo))));
+      ctx.beginPath();
+      ctx.moveTo(X(lo), Y(0));
+      for (let i = 0; i <= n; i++) {
+        const x = lo + ((hi - lo) * i) / n;
+        const y = shade.f(x);
+        ctx.lineTo(X(x), Y(Number.isFinite(y) ? y : 0));
+      }
+      ctx.lineTo(X(hi), Y(0));
+      ctx.closePath();
+      ctx.globalAlpha = 0.25;
+      ctx.fillStyle = shade.color;
+      ctx.fill();
+      ctx.globalAlpha = 1;
     }
 
     // Curves: one sample per pixel.

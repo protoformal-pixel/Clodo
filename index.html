@@ -48,6 +48,14 @@
             <button id="graph-angle" title="Angle unit for sin, cos and tan">Deg</button>
             <button id="table-toggle" aria-pressed="false">Table</button>
           </div>
+          <div class="graph-toolbar gsolv" id="gsolv" aria-label="Analyse the graph">
+            <button data-solve="root" title="Where the curve crosses y = 0">Root</button>
+            <button data-solve="min" title="Lowest point">Min</button>
+            <button data-solve="max" title="Highest point">Max</button>
+            <button data-solve="isect" title="Where two curves meet">Isect</button>
+            <button data-solve="integral" title="Area between two x values">∫dx</button>
+          </div>
+          <div class="solve-result" id="solve-result" aria-live="polite" hidden></div>
           <p class="trace" id="trace" aria-live="polite"></p>
           <div class="table-wrap" id="table-wrap" hidden>
             <table class="value-table" id="value-table"></table>
@@ -104,6 +112,13 @@
           <button data-insert="%">%</button>
           <button data-insert="Abs(" title="Absolute value">|x|</button>
           <button data-insert="Ans" title="Last answer">Ans</button>
+        </div>
+        <div class="calc-keys">
+          <button data-insert="∫(" title="Integral: ∫(f(x), from, to)">∫dx</button>
+          <button data-insert="d/dx(" title="Slope: d/dx(f(x), at x)">d/dx</button>
+          <button data-insert="Solve(" title="Solve f(x) = 0: Solve(f(x), start)">Solve</button>
+          <button data-insert="," title="Separates values">,</button>
+          <button data-insert="x" class="x-key" title="The variable x">x</button>
         </div>
         <div class="memory" aria-label="Memory">
           <div class="memory-header">
@@ -167,6 +182,7 @@
         <ol id="history-list" class="history-list"></ol>
       </section>
     </main>
+    <script src="calculus.js"></script>
     <script src="calculator.js"></script>
     <script src="graph.js"></script>
     <script src="app.js"></script>

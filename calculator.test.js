@@ -4,7 +4,7 @@ const C = require("./calculator.js");
 
 // Multi-character tokens, longest first; everything else is one character.
 const TOKEN_PATTERN =
-  /→[A-F]|[sct][a-z]{2}⁻¹\(|sin\(|cos\(|tan\(|ln\(|log\(|√\(|e\^\(|10\^\(|Abs\(|Ans|root|neg|⁻¹|./g;
+  /→[A-F]|∫\(|d\/dx\(|Solve\(|[sct][a-z]{2}⁻¹\(|sin\(|cos\(|tan\(|ln\(|log\(|√\(|e\^\(|10\^\(|Abs\(|Ans|root|neg|⁻¹|./g;
 
 // Type keys and return the final state. "=" evaluates, "<" is ⌫, "[" and
 // "]" move the cursor, "→A" stores in A. Operators use the internal tokens:
@@ -276,4 +276,30 @@ test("memory: errors store nothing and memory survives AC", () => {
   // A state can start with saved memory, e.g. after reopening the app.
   assert.strictEqual(C.createState(0, { E: 2.5 }).memory.E, 2.5);
   assert.strictEqual(C.createState(0, { E: 2.5 }).memory.A, 0);
+});
+
+test("calculus: integrals, derivatives and Solve", () => {
+  assert.strictEqual(calc("∫(x²,0,3)"), "9");
+  assert.strictEqual(calc("∫(sin(x),0,π)", { angle: "rad" }), "2");
+  assert.strictEqual(calc("∫(1/x,1,e)"), "1");
+  assert.strictEqual(calc("∫(x²,3,0)"), "-9");
+  assert.strictEqual(calc("d/dx(x^3,2)"), "12");
+  assert.strictEqual(calc("d/dx(sin(x),0)", { angle: "rad" }), "1");
+  assert.strictEqual(calc("Solve(x²-2,1)"), "1.41421356237");
+  assert.strictEqual(calc("Solve(x²-2,neg1)"), "-1.41421356237");
+  assert.strictEqual(calc("Solve(cos(x)-x)", { angle: "rad" }), "0.739085133215");
+  // They combine with everything else.
+  assert.strictEqual(calc("2∫(x,0,1)+1"), "2");
+  assert.strictEqual(calc("∫(d/dx(x²,x),0,1)"), "1");
+  assert.strictEqual(calc("∫(Ax,0,2)", { state: run("3→A") }), "6");
+});
+
+test("calculus errors", () => {
+  assert.strictEqual(calc("Solve(x²+1)"), "Can't Solve");
+  assert.strictEqual(calc("∫(√(x),neg2,neg1)"), "Math Error");
+  assert.strictEqual(calc("∫(x,0)"), "Syntax Error");
+  assert.strictEqual(calc("d/dx(x)"), "Syntax Error");
+  assert.strictEqual(calc("Solve(x,1,2)"), "Syntax Error");
+  assert.strictEqual(calc("2,3"), "Syntax Error");
+  assert.strictEqual(C.toText(run("∫(x²,0,3)").tokens), "∫(x²,0,3)");
 });

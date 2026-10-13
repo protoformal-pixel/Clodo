@@ -594,3 +594,74 @@ button:focus-visible {
   color: var(--muted);
   font-weight: 600;
 }
+
+/* Calculus keys in the Sci panel */
+
+.calc-keys {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.calc-keys button {
+  min-width: 0;
+  height: 40px;
+  font-size: 0.95rem;
+}
+
+.calc-keys .x-key {
+  width: auto;
+  font-size: 1.3rem;
+}
+
+/* G-Solv */
+
+.gsolv button[aria-pressed="true"] {
+  background: var(--op);
+  color: var(--op-text);
+}
+
+.solve-result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: var(--key);
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.solve-result .val {
+  color: var(--key-text);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.solve-result .solve-note {
+  flex-basis: 100%;
+  order: 1;
+}
+
+.solve-target {
+  height: 28px;
+  padding: 0 10px;
+  aspect-ratio: auto;
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--key-text);
+  font-size: 0.9rem;
+}
+
+.solve-close {
+  width: 28px;
+  height: 28px;
+  margin-left: auto;
+  aspect-ratio: auto;
+  background: none;
+  color: var(--muted);
+  font-size: 1.2rem;
+}
