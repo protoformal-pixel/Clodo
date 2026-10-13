@@ -3,6 +3,7 @@
   "use strict";
 
   const C = window.Calculator;
+  const G = window.Graph;
   const displayEl = document.getElementById("display");
   const backspaceBtn = document.getElementById("backspace");
   const expressionEl = document.getElementById("expression");
@@ -18,15 +19,34 @@
   const clearHistoryBtn = document.getElementById("clear-history");
   const stoBtn = document.getElementById("sto");
   const clearMemoryBtn = document.getElementById("clear-memory");
+  const screenEl = document.getElementById("screen");
+  const keysEl = document.querySelector(".keys");
+  const graphEl = document.getElementById("graph");
+  const graphToggle = document.getElementById("graph-toggle");
+  const fnList = document.getElementById("fn-list");
+  const fnTools = document.getElementById("fn-tools");
+  const plotEl = document.getElementById("plot");
+  const canvas = document.getElementById("graph-canvas");
+  const traceEl = document.getElementById("trace");
+  const tableWrap = document.getElementById("table-wrap");
+  const tableEl = document.getElementById("value-table");
+  const tableToggle = document.getElementById("table-toggle");
+  const graphAngleBtn = document.getElementById("graph-angle");
   const symbols = { "+": "+", "-": "−", "*": "×", "/": "÷", "^": "^", root: "ʸ√" };
   const HISTORY_KEY = "calculator-history";
   const SETTINGS_KEY = "calculator-settings";
   const MEMORY_KEY = "calculator-memory";
+  const GRAPH_KEY = "calculator-graph";
+  const FUNCTION_COUNT = 3;
   let state = C.createState(0, loadMemory());
   let history = loadHistory();
   let settings = loadSettings(); // { sci, history: boolean, angle: "deg" | "rad" }
   let inverse = false;
   let storing = false; // STO pressed, waiting for a letter
+  // Graph mode: y1–y3, each edited like the main display.
+  let graph = loadGraph(); // { editors, hidden, view, table }
+  let editing = null; // index of the function being typed, or null
+  let traceX = null; // x of the trace line, or null
 
   // History and settings are kept in this browser only. Storage can be
   // unavailable (e.g. private browsing), so every access is guarded.
@@ -64,8 +84,36 @@
     return {
       sci: saved.sci === true,
       history: saved.history === true,
+      graph: saved.graph === true,
       angle: saved.angle === "rad" ? "rad" : "deg",
     };
+  }
+
+  function loadGraph() {
+    const saved = load(GRAPH_KEY) || {};
+    const isTokens = (t) => Array.isArray(t) && t.every((x) => typeof x === "string");
+    const functions = Array.isArray(saved.functions) ? saved.functions : [];
+    const v = saved.view;
+    const validView =
+      v && ["cx", "cy", "sx", "sy"].every((k) => Number.isFinite(v[k])) && v.sx > 0 && v.sy > 0;
+    return {
+      editors: Array.from({ length: FUNCTION_COUNT }, (_, i) => ({
+        ...C.createState(),
+        tokens: isTokens(functions[i]) ? functions[i] : [],
+      })),
+      hidden: Array.from({ length: FUNCTION_COUNT }, (_, i) => saved.hidden?.[i] === true),
+      view: validView ? v : null,
+      table: saved.table === true,
+    };
+  }
+
+  function saveGraph() {
+    save(GRAPH_KEY, {
+      functions: graph.editors.map((e) => e.tokens),
+      hidden: graph.hidden,
+      view: graph.view,
+      table: graph.table,
+    });
   }
 
   // History saved by earlier versions used " * " style text.
@@ -112,9 +160,21 @@
   }
 
   function renderModes() {
-    sciEl.hidden = !settings.sci;
+    // In Graph mode the keypad only shows while a function is being typed.
+    const graphMode = settings.graph;
+    const keypad = !graphMode || editing !== null;
+    graphEl.hidden = !graphMode;
+    screenEl.hidden = graphMode;
+    keysEl.hidden = !keypad;
+    fnTools.hidden = editing === null;
+    plotEl.hidden = editing !== null;
+    graphToggle.setAttribute("aria-pressed", graphMode);
+    graphAngleBtn.textContent = settings.angle === "deg" ? "Deg" : "Rad";
+    tableToggle.setAttribute("aria-pressed", graph.table);
+    sciEl.hidden = !settings.sci || !keypad;
     sciToggle.setAttribute("aria-pressed", settings.sci);
-    historyEl.hidden = !settings.history;
+    historyEl.hidden = !settings.history || graphMode;
+    historyToggle.hidden = graphMode;
     historyToggle.setAttribute("aria-pressed", settings.history);
     invBtn.setAttribute("aria-pressed", inverse);
     document.querySelectorAll("[data-angle]").forEach((btn) => {
@@ -126,7 +186,7 @@
     });
     stoBtn.setAttribute("aria-pressed", storing);
     sciEl.classList.toggle("is-storing", storing);
-    modeEl.textContent = settings.sci
+    modeEl.textContent = settings.sci || graphMode
       ? [settings.angle.toUpperCase(), inverse && "INV", storing && "STO"]
           .filter(Boolean)
           .join(" ")
@@ -186,6 +246,7 @@
   }
 
   function handle(action, value) {
+    if (editing !== null) return editFunction(action, value);
     switch (action) {
       case "insert":
         state = C.insert(state, value);
@@ -224,6 +285,388 @@
         break;
     }
     render();
+  }
+
+  // ---------------------------------------------------------------------
+  // Graph mode
+
+  // The function as something to plot: f(x), or an error message.
+  function compile(i) {
+    const { tokens } = graph.editors[i];
+    if (!tokens.length) return null;
+    try {
+      const tree = C.parse(tokens);
+      const env = { angle: settings.angle, ans: state.ans, memory: state.memory };
+      return {
+        f(x) {
+          try {
+            return C.evaluate(tree, { ...env, x });
+          } catch {
+            return NaN; // undefined here, e.g. √x for x < 0
+          }
+        },
+      };
+    } catch (e) {
+      if (!e.calcError) throw e;
+      return { error: e.calcError };
+    }
+  }
+
+  function seriesColor(i) {
+    return `var(--series-${i + 1})`;
+  }
+
+  // Tokens as spans, with the caret when editing.
+  function renderTokens(el, tokens, cursor, withCaret) {
+    const parts = tokens.map((token, i) => {
+      const part = span(C.tokenText(token));
+      part.dataset.index = i;
+      return part;
+    });
+    if (withCaret) parts.splice(cursor === null ? parts.length : cursor, 0, span("", "caret"));
+    el.replaceChildren(...parts);
+  }
+
+  // Which gap between tokens a tap landed in.
+  function tapIndex(el, event, length) {
+    const part = event.target.closest("[data-index]");
+    if (part) {
+      const box = part.getBoundingClientRect();
+      return Number(part.dataset.index) + (event.clientX > box.left + box.width / 2 ? 1 : 0);
+    }
+    const first = el.querySelector("[data-index]");
+    return first && event.clientX < first.getBoundingClientRect().left ? 0 : length;
+  }
+
+  function renderFunctions() {
+    fnList.replaceChildren(
+      ...graph.editors.map((editor, i) => {
+        const row = document.createElement("li");
+        row.className = "fn-row";
+        row.classList.toggle("is-editing", editing === i);
+        row.style.setProperty("--fn-color", seriesColor(i));
+
+        const swatch = document.createElement("button");
+        swatch.className = "fn-swatch";
+        swatch.dataset.toggle = i;
+        swatch.setAttribute("aria-pressed", !graph.hidden[i]);
+        swatch.setAttribute("aria-label", `Show y${i + 1} on the graph`);
+        swatch.title = "Show or hide";
+
+        const name = span(`y${i + 1} =`, "fn-name");
+        const expr = document.createElement("div");
+        expr.className = "fn-expr";
+        expr.dataset.fn = i;
+        if (editor.tokens.length || editing === i) {
+          renderTokens(expr, editor.tokens, editor.cursor, editing === i);
+        } else {
+          expr.append(span("Tap to enter a function of x", "placeholder"));
+        }
+        row.append(swatch, name, expr);
+
+        const compiled = editing === i ? null : compile(i);
+        if (compiled?.error) row.append(span(compiled.error, "fn-error"));
+        return row;
+      })
+    );
+  }
+
+  function curves() {
+    const list = [];
+    graph.editors.forEach((_, i) => {
+      if (graph.hidden[i]) return;
+      const compiled = compile(i);
+      if (compiled?.f) list.push({ i, f: compiled.f });
+    });
+    return list;
+  }
+
+  function size() {
+    return { width: canvas.clientWidth, height: canvas.clientHeight };
+  }
+
+  let drawPending = false;
+  function scheduleDraw() {
+    if (drawPending) return;
+    drawPending = true;
+    requestAnimationFrame(() => {
+      drawPending = false;
+      drawPlot();
+    });
+  }
+
+  function drawPlot() {
+    if (graphEl.hidden || plotEl.hidden) return;
+    const { width, height } = size();
+    if (!width || !height) return;
+    if (!graph.view) graph.view = G.standardView(width);
+    const ratio = window.devicePixelRatio || 1;
+    canvas.width = Math.round(width * ratio);
+    canvas.height = Math.round(height * ratio);
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+
+    const css = getComputedStyle(document.documentElement);
+    const color = (name) => css.getPropertyValue(name).trim();
+    const shown = curves().map((c) => ({ f: c.f, color: color(`--series-${c.i + 1}`), i: c.i }));
+    G.draw(ctx, width, height, graph.view, shown, {
+      surface: color("--panel"),
+      grid: color("--graph-grid"),
+      axis: color("--graph-axis"),
+      label: color("--muted"),
+    }, traceX);
+    renderTrace(shown);
+    renderTable(shown);
+  }
+
+  // The values at the trace line, under the graph. Text stays in the text
+  // colour; a coloured dot says which curve it is.
+  function renderTrace(shown) {
+    if (traceX === null) {
+      traceEl.replaceChildren(
+        span("Tap to trace · drag to move · pinch or scroll to zoom")
+      );
+      return;
+    }
+    const parts = [span(`x = `), span(G.label(traceX), "val")];
+    for (const c of shown) {
+      const y = c.f(traceX);
+      const item = span("", "trace-item");
+      const dot = span("", "dot");
+      dot.style.setProperty("--fn-color", seriesColor(c.i));
+      item.append(dot, span(`y${c.i + 1} = `), span(Number.isFinite(y) ? G.label(y) : "—", "val"));
+      parts.push(item);
+    }
+    traceEl.replaceChildren(...parts);
+  }
+
+  // A table of values at the grid lines currently in view.
+  function renderTable(shown) {
+    tableWrap.hidden = !graph.table;
+    if (!graph.table) return;
+    const { width, height } = size();
+    const b = G.bounds(graph.view, width, height);
+    const xs = G.ticks(b.xmin, b.xmax, 10);
+    const head = document.createElement("tr");
+    head.append(Object.assign(document.createElement("th"), { textContent: "x" }));
+    for (const c of shown) {
+      const th = document.createElement("th");
+      const dot = span("", "dot");
+      dot.style.setProperty("--fn-color", seriesColor(c.i));
+      th.append(dot, `y${c.i + 1}`);
+      head.append(th);
+    }
+    const rows = xs.values.map((x) => {
+      const tr = document.createElement("tr");
+      const cells = [G.label(x, xs.step), ...shown.map((c) => {
+        const y = c.f(x);
+        return Number.isFinite(y) ? G.label(y) : "—";
+      })];
+      for (const text of cells) {
+        tr.append(Object.assign(document.createElement("td"), { textContent: text }));
+      }
+      return tr;
+    });
+    tableEl.replaceChildren(head, ...rows);
+  }
+
+  function renderGraph() {
+    if (graphEl.hidden) return;
+    renderFunctions();
+    scheduleDraw();
+  }
+
+  function startEditing(i) {
+    editing = i;
+    renderModes();
+    renderGraph();
+  }
+
+  function stopEditing() {
+    editing = null;
+    saveGraph();
+    renderModes();
+    renderGraph();
+  }
+
+  // Keys while a function is being typed go to that function.
+  function editFunction(action, value) {
+    const editor = graph.editors[editing];
+    let next = editor;
+    switch (action) {
+      case "insert":
+        next = C.insert(editor, value);
+        break;
+      case "recall":
+        next = C.insertNumber(editor, value);
+        break;
+      case "backspace":
+        next = C.backspace(editor);
+        break;
+      case "clear":
+        next = { ...editor, tokens: [], cursor: null };
+        break;
+      case "cursor":
+        next = C.moveCursor(editor, value);
+        break;
+      case "setCursor":
+        next = C.setCursor(editor, value);
+        break;
+      case "equals":
+        return stopEditing();
+    }
+    graph.editors[editing] = next;
+    saveGraph();
+    renderFunctions();
+  }
+
+  graphToggle.addEventListener("click", () => {
+    settings.graph = !settings.graph;
+    save(SETTINGS_KEY, settings);
+    editing = null;
+    renderModes();
+    renderGraph();
+  });
+
+  fnList.addEventListener("click", (event) => {
+    const swatch = event.target.closest("[data-toggle]");
+    if (swatch) {
+      const i = Number(swatch.dataset.toggle);
+      graph.hidden[i] = !graph.hidden[i];
+      saveGraph();
+      return renderGraph();
+    }
+    const expr = event.target.closest("[data-fn]");
+    if (!expr) return;
+    const i = Number(expr.dataset.fn);
+    if (editing !== i) return startEditing(i);
+    handle("setCursor", tapIndex(expr, event, graph.editors[i].tokens.length));
+  });
+
+  fnTools.addEventListener("click", (event) => {
+    const btn = event.target.closest("button");
+    if (!btn) return;
+    if (btn.id === "fn-done") stopEditing();
+    else if (btn.id === "fn-backspace") handle("backspace");
+    else pressKey(btn);
+  });
+
+  // Drag to pan, pinch to zoom, tap to trace.
+  const pointers = new Map();
+  let moved = false;
+
+  function canvasPoint(event) {
+    const box = canvas.getBoundingClientRect();
+    return { x: event.clientX - box.left, y: event.clientY - box.top };
+  }
+
+  canvas.addEventListener("pointerdown", (event) => {
+    canvas.setPointerCapture(event.pointerId);
+    pointers.set(event.pointerId, canvasPoint(event));
+    moved = pointers.size > 1;
+  });
+
+  canvas.addEventListener("pointermove", (event) => {
+    if (!pointers.has(event.pointerId)) return;
+    const { width, height } = size();
+    const before = [...pointers.values()];
+    const point = canvasPoint(event);
+    const last = pointers.get(event.pointerId);
+    pointers.set(event.pointerId, point);
+    if (pointers.size === 1) {
+      if (!moved && Math.hypot(point.x - last.x, point.y - last.y) < 4) {
+        pointers.set(event.pointerId, last); // too small to count as a drag yet
+        return;
+      }
+      moved = true;
+      graph.view = G.pan(graph.view, point.x - last.x, point.y - last.y);
+    } else if (pointers.size === 2) {
+      const after = [...pointers.values()];
+      const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+      const mid = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+      const m0 = mid(before[0], before[1]);
+      const m1 = mid(after[0], after[1]);
+      const factor = dist(before[0], before[1]) / Math.max(dist(after[0], after[1]), 1);
+      graph.view = G.pan(graph.view, m1.x - m0.x, m1.y - m0.y);
+      graph.view = G.zoom(graph.view, factor, m1.x, m1.y, width, height);
+    }
+    scheduleDraw();
+  });
+
+  function endPointer(event) {
+    if (!pointers.has(event.pointerId)) return;
+    if (!moved && pointers.size === 1) {
+      const { width, height } = size();
+      const b = G.bounds(graph.view, width, height);
+      traceX = b.xmin + canvasPoint(event).x * graph.view.sx;
+      scheduleDraw();
+    }
+    pointers.delete(event.pointerId);
+    if (!pointers.size) saveGraph();
+  }
+  canvas.addEventListener("pointerup", endPointer);
+  canvas.addEventListener("pointercancel", endPointer);
+
+  canvas.addEventListener(
+    "wheel",
+    (event) => {
+      event.preventDefault();
+      const { width, height } = size();
+      const point = canvasPoint(event);
+      graph.view = G.zoom(graph.view, Math.exp(event.deltaY * 0.002), point.x, point.y, width, height);
+      scheduleDraw();
+      saveGraph();
+    },
+    { passive: false }
+  );
+
+  function zoomCentre(factor) {
+    const { width, height } = size();
+    graph.view = G.zoom(graph.view, factor, width / 2, height / 2, width, height);
+    saveGraph();
+    scheduleDraw();
+  }
+
+  document.getElementById("zoom-in").addEventListener("click", () => zoomCentre(0.5));
+  document.getElementById("zoom-out").addEventListener("click", () => zoomCentre(2));
+  document.getElementById("zoom-std").addEventListener("click", () => {
+    graph.view = G.standardView(size().width);
+    saveGraph();
+    scheduleDraw();
+  });
+  document.getElementById("zoom-trig").addEventListener("click", () => {
+    const { width, height } = size();
+    graph.view = G.trigView(width, height, settings.angle);
+    saveGraph();
+    scheduleDraw();
+  });
+  graphAngleBtn.addEventListener("click", () => {
+    settings.angle = settings.angle === "deg" ? "rad" : "deg";
+    save(SETTINGS_KEY, settings);
+    renderModes();
+    renderGraph();
+  });
+  tableToggle.addEventListener("click", () => {
+    graph.table = !graph.table;
+    saveGraph();
+    renderModes();
+    scheduleDraw();
+  });
+
+  new ResizeObserver(scheduleDraw).observe(canvas);
+
+  // Arrow keys move the trace line one pixel's worth; + and − zoom.
+  function graphKey(key) {
+    const { width, height } = size();
+    const b = G.bounds(graph.view, width, height);
+    if (key === "ArrowLeft" || key === "ArrowRight") {
+      if (traceX === null) traceX = (b.xmin + b.xmax) / 2;
+      traceX += (key === "ArrowLeft" ? -1 : 1) * graph.view.sx;
+      scheduleDraw();
+    } else if (key === "+") zoomCentre(0.5);
+    else if (key === "-") zoomCentre(2);
+    else return false;
+    return true;
   }
 
   function pressKey(btn) {
@@ -339,7 +782,12 @@
         return;
       }
     }
-    if (typed.has(key)) handle("insert", key);
+    if (settings.graph && editing === null) {
+      if (graphKey(key)) event.preventDefault();
+      return;
+    }
+    if (key === "x" && editing !== null) handle("insert", "x");
+    else if (typed.has(key)) handle("insert", key);
     else if (key === ",") handle("insert", ".");
     else if (key === "Enter" || key === "=") handle("equals");
     else if (key === "Backspace") handle("backspace");
@@ -356,6 +804,7 @@
   renderModes();
   render();
   renderHistory();
+  renderGraph();
 
   // Makes the app installable and usable offline (see sw.js).
   if ("serviceWorker" in navigator) {

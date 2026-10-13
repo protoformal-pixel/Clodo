@@ -216,7 +216,12 @@ test("history results can be typed back in", () => {
   assert.strictEqual(C.toText(C.insertNumber(run("2+3="), "15").tokens), "15");
 });
 
-test("the parse tree can be evaluated for any x (for graphs later)", () => {
+test("x outside a graph is a syntax error, not a crash", () => {
+  assert.strictEqual(calc("x"), "Syntax Error");
+  assert.strictEqual(calc("2x+1"), "Syntax Error");
+});
+
+test("the parse tree can be evaluated for any x (for graphs)", () => {
   const tree = C.parse(["x", "²", "-", "3", "x"]);
   assert.strictEqual(C.evaluate(tree, { x: 2, angle: "deg" }), -2);
   assert.strictEqual(C.evaluate(tree, { x: 5, angle: "deg" }), 10);
