@@ -85,6 +85,13 @@
 
   const CONSTANTS = { π: Math.PI, e: Math.E };
 
+  // Memory variables, typed as tokens like any number: 2A+1.
+  const VARIABLES = ["A", "B", "C", "D", "E", "F"];
+
+  function emptyMemory() {
+    return Object.fromEntries(VARIABLES.map((name) => [name, 0]));
+  }
+
   // "root": a ʸ√ b is the b-th root of a, so 27 ʸ√ 3 = 3.
   const BINARY = {
     "+": (a, b) => a + b,
@@ -120,7 +127,7 @@
   //   unary    = ("-" | "neg" | "+") unary | power
   //   power    = postfix (("^" | "ʸ√") unary)?        right to left: 2^3^2
   //   postfix  = primary ("²" | "!" | "⁻¹" | "%")*
-  //   primary  = number | π | e | Ans | x | "(" sum ")" | function sum ")"
+  //   primary  = number | π | e | Ans | A–F | x | "(" sum ")" | function sum ")"
   //
   // Missing closing brackets at the very end are added, as on a Casio.
 
@@ -161,6 +168,7 @@
         item in CONSTANTS ||
         item in FUNCTIONS ||
         item === "Ans" ||
+        VARIABLES.includes(item) ||
         item === "x" ||
         item === "(");
 
@@ -176,6 +184,7 @@
       if (typeof item === "object") return { type: "num", value: item.number };
       if (item in CONSTANTS) return { type: "num", value: CONSTANTS[item] };
       if (item === "Ans") return { type: "ans" };
+      if (VARIABLES.includes(item)) return { type: "var", name: item };
       if (item === "x") return { type: "x" };
       if (item === "(") {
         const inner = sum();
@@ -253,7 +262,7 @@
   // ---------------------------------------------------------------------
   // Evaluating: tree -> number
   //
-  // env: { angle: "deg" | "rad", ans: number, x: number }
+  // env: { angle: "deg" | "rad", ans: number, memory: { A: number, … }, x: number }
 
   function evaluate(node, env) {
     let value;
@@ -262,6 +271,8 @@
         return node.value;
       case "ans":
         return env.ans;
+      case "var":
+        return env.memory?.[node.name] ?? 0;
       case "x":
         return env.x;
       case "neg":
@@ -291,9 +302,10 @@
   // tokens: what has been typed. cursor: where the next token goes (an
   // index into tokens), or null for the end. result: the answer shown after
   // "=", or null while typing. error: "Syntax Error" / "Math Error" after a
-  // failed "=", cleared by the next edit. ans: the last answer.
+  // failed "=", cleared by the next edit. ans: the last answer. memory: the
+  // values stored in A–F.
 
-  function createState(ans = 0) {
+  function createState(ans = 0, memory = emptyMemory()) {
     return {
       tokens: [],
       cursor: null,
@@ -301,6 +313,7 @@
       resultExpression: null,
       error: null,
       ans,
+      memory: { ...emptyMemory(), ...memory },
       completed: null, // set by equals: { expression, result } for history
     };
   }
@@ -370,8 +383,9 @@
     };
   }
 
+  // AC clears the expression; Ans and memory stay.
   function clear(state) {
-    return createState(state.ans);
+    return createState(state.ans, state.memory);
   }
 
   // Put the cursor before token number index (the end is null).
@@ -393,7 +407,7 @@
       return { ...state, completed: null };
     }
     try {
-      const value = calculate(state.tokens, { angle, ans: state.ans });
+      const value = calculate(state.tokens, env(state, angle));
       const result = format(value);
       const expression = toText(state.tokens, state.ans);
       return {
@@ -417,10 +431,42 @@
     if (state.result !== null || state.error || !state.tokens.length) return null;
     if (state.tokens.every(isDigit)) return null;
     try {
-      return format(calculate(state.tokens, { angle, ans: state.ans }));
+      return format(calculate(state.tokens, env(state, angle)));
     } catch {
       return null;
     }
+  }
+
+  function env(state, angle) {
+    return { angle, ans: state.ans, memory: state.memory };
+  }
+
+  // STO then a letter: work out the expression (or take the answer on
+  // screen, or Ans if nothing is typed) and keep it in that letter.
+  function store(state, name, angle = "deg") {
+    if (!VARIABLES.includes(name)) return state;
+    let done;
+    if (state.result !== null) {
+      done = { ...state, completed: null }; // already in history
+    } else {
+      const tokens = state.tokens.length ? state.tokens : ["Ans"];
+      done = equals({ ...state, tokens, cursor: null }, angle);
+      if (done.error) return done;
+    }
+    const arrow = `→${name}`;
+    return {
+      ...done,
+      memory: { ...done.memory, [name]: done.ans },
+      resultExpression: done.resultExpression + arrow,
+      completed: done.completed && {
+        ...done.completed,
+        expression: done.completed.expression + arrow,
+      },
+    };
+  }
+
+  function clearMemory(state) {
+    return { ...state, memory: emptyMemory() };
   }
 
   // Newest first, capped at HISTORY_LIMIT entries.
@@ -439,6 +485,9 @@
     moveCursor,
     equals,
     preview,
+    store,
+    clearMemory,
+    VARIABLES,
     tokenText,
     toText,
     parse,

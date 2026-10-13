@@ -4,16 +4,18 @@ const C = require("./calculator.js");
 
 // Multi-character tokens, longest first; everything else is one character.
 const TOKEN_PATTERN =
-  /[sct][a-z]{2}⁻¹\(|sin\(|cos\(|tan\(|ln\(|log\(|√\(|e\^\(|10\^\(|Abs\(|Ans|root|neg|⁻¹|./g;
+  /→[A-F]|[sct][a-z]{2}⁻¹\(|sin\(|cos\(|tan\(|ln\(|log\(|√\(|e\^\(|10\^\(|Abs\(|Ans|root|neg|⁻¹|./g;
 
 // Type keys and return the final state. "=" evaluates, "<" is ⌫, "[" and
-// "]" move the cursor. Operators use the internal tokens: * / - root neg.
+// "]" move the cursor, "→A" stores in A. Operators use the internal tokens:
+// * / - root neg.
 function run(keys, { state = C.createState(), angle = "deg" } = {}) {
   for (const key of keys.match(TOKEN_PATTERN)) {
     if (key === "=") state = C.equals(state, angle);
     else if (key === "<") state = C.backspace(state);
     else if (key === "[") state = C.moveCursor(state, -1);
     else if (key === "]") state = C.moveCursor(state, 1);
+    else if (key.startsWith("→")) state = C.store(state, key[1], angle);
     else state = C.insert(state, key);
   }
   return state;
@@ -228,4 +230,45 @@ test("history keeps the newest 10 entries, newest first", () => {
   assert.strictEqual(history.length, 10);
   assert.strictEqual(history[0].result, "12");
   assert.strictEqual(history[9].result, "3");
+});
+
+test("memory: STO stores, letters recall", () => {
+  const stored = run("2*3→A");
+  assert.strictEqual(stored.result, "6");
+  assert.strictEqual(stored.memory.A, 6);
+  assert.strictEqual(stored.resultExpression, "2×3→A");
+  assert.deepStrictEqual(stored.completed, { expression: "2×3→A", result: "6" });
+  // Letters work like numbers, including without a × sign.
+  assert.strictEqual(run("A+1=", { state: stored }).result, "7");
+  assert.strictEqual(run("2A=", { state: stored }).result, "12");
+  assert.strictEqual(run("A²-B=", { state: stored }).result, "36"); // B is 0
+  // Memory keeps full precision: 1/3 → B, then 3B = 1.
+  assert.strictEqual(run("3B=", { state: run("1/3→B") }).result, "1");
+});
+
+test("memory: what STO stores", () => {
+  // The answer on screen, without a second history entry.
+  const fromResult = run("4+5=→C");
+  assert.strictEqual(fromResult.memory.C, 9);
+  assert.strictEqual(fromResult.resultExpression, "4+5→C");
+  assert.strictEqual(fromResult.completed, null);
+  // Ans when nothing is typed.
+  const fromAns = run("→D", { state: C.clear(run("7*6=")) });
+  assert.strictEqual(fromAns.memory.D, 42);
+  assert.strictEqual(fromAns.result, "42");
+  // Storing a new value replaces the old one.
+  assert.strictEqual(run("1→A2→A").memory.A, 2);
+  // Unknown letters are ignored.
+  assert.strictEqual(C.store(run("5"), "Z").memory.Z, undefined);
+});
+
+test("memory: errors store nothing and memory survives AC", () => {
+  const failed = run("5/0→A", { state: run("8→A") });
+  assert.strictEqual(failed.error, "Math Error");
+  assert.strictEqual(failed.memory.A, 8);
+  assert.strictEqual(C.clear(failed).memory.A, 8);
+  assert.strictEqual(C.clearMemory(failed).memory.A, 0);
+  // A state can start with saved memory, e.g. after reopening the app.
+  assert.strictEqual(C.createState(0, { E: 2.5 }).memory.E, 2.5);
+  assert.strictEqual(C.createState(0, { E: 2.5 }).memory.A, 0);
 });

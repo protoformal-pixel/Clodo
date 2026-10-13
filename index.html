@@ -73,6 +73,33 @@
           <button data-insert="Abs(" title="Absolute value">|x|</button>
           <button data-insert="Ans" title="Last answer">Ans</button>
         </div>
+        <div class="memory" aria-label="Memory">
+          <div class="memory-header">
+            <span>Memory</span>
+            <button id="clear-memory" class="link" hidden>Clear</button>
+          </div>
+          <div class="memory-keys">
+          <button id="sto" aria-pressed="false" title="Store in a letter">STO</button>
+          <button data-insert="A" data-var="A" aria-label="Memory A">
+            <span class="var-name">A</span><span class="var-value">0</span>
+          </button>
+          <button data-insert="B" data-var="B" aria-label="Memory B">
+            <span class="var-name">B</span><span class="var-value">0</span>
+          </button>
+          <button data-insert="C" data-var="C" aria-label="Memory C">
+            <span class="var-name">C</span><span class="var-value">0</span>
+          </button>
+          <button data-insert="D" data-var="D" aria-label="Memory D">
+            <span class="var-name">D</span><span class="var-value">0</span>
+          </button>
+          <button data-insert="E" data-var="E" aria-label="Memory E">
+            <span class="var-name">E</span><span class="var-value">0</span>
+          </button>
+          <button data-insert="F" data-var="F" aria-label="Memory F">
+            <span class="var-name">F</span><span class="var-value">0</span>
+          </button>
+          </div>
+        </div>
       </div>
       <div class="keys">
         <button data-action="clear" class="fn">AC</button>

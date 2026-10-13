@@ -21,6 +21,10 @@ A simple calculator that runs in the browser with no dependencies or build step.
   Functions go before their number and open a bracket: `sin(30)`. **Inv** switches keys
   to their inverse (`sin⁻¹`, `√`, `ʸ√x`, `eˣ`, `10ˣ`), and **Deg/Rad** sets the angle
   unit (Degrees by default).
+- **Memory (A–F):** in the Sci panel, press **STO** then a letter to store the current
+  expression's answer (or the answer on screen, or Ans if nothing is typed), shown as
+  `2×3→A = 6`. Tap a letter to use it in an expression, like `2A+1`. Each letter shows
+  its value, and memory is kept after closing the app; **Clear** resets all to 0.
 - **Fixing typos:** **⌫** deletes the last key (`sin(` goes in one press). Tap between
   two parts of the expression (or use `←` `→`) to type or delete there. After a result,
   tap it, or press **⌫** or an arrow, to go back to the expression and change it.
@@ -29,7 +33,8 @@ A simple calculator that runs in the browser with no dependencies or build step.
   reload; **Clear** empties it.
 - **Keyboard:** digits, `+ - * / ^ ( ) . ! %`, `Enter`/`=`, `Backspace`, `←` `→`, `Esc`
   (clear). Scientific: `s` `c` `t` sin/cos/tan, `l` log, `n` ln, `r` √, `p` π, `e`,
-  `a` Ans. With **Inv** on, `s` `c` `t` `l` `n` type the inverse functions.
+  `a` Ans, Shift+`A`…`F` memory letters (after **STO**, Shift+letter stores). With **Inv**
+  on, `s` `c` `t` `l` `n` type the inverse functions.
 - **Install it as an app:** open the GitHub Pages site, then
   - **Android (Chrome):** ⋮ menu → **Add to Home screen** → **Install**.
   - **iPhone (Safari):** Share button → **Add to Home Screen**.

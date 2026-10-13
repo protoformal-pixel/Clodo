@@ -16,13 +16,17 @@
   const historyList = document.getElementById("history-list");
   const historyEmpty = document.getElementById("history-empty");
   const clearHistoryBtn = document.getElementById("clear-history");
+  const stoBtn = document.getElementById("sto");
+  const clearMemoryBtn = document.getElementById("clear-memory");
   const symbols = { "+": "+", "-": "−", "*": "×", "/": "÷", "^": "^", root: "ʸ√" };
   const HISTORY_KEY = "calculator-history";
   const SETTINGS_KEY = "calculator-settings";
-  let state = C.createState();
+  const MEMORY_KEY = "calculator-memory";
+  let state = C.createState(0, loadMemory());
   let history = loadHistory();
   let settings = loadSettings(); // { sci, history: boolean, angle: "deg" | "rad" }
   let inverse = false;
+  let storing = false; // STO pressed, waiting for a letter
 
   // History and settings are kept in this browser only. Storage can be
   // unavailable (e.g. private browsing), so every access is guarded.
@@ -45,6 +49,14 @@
   function loadHistory() {
     const saved = load(HISTORY_KEY);
     return Array.isArray(saved) ? saved.slice(0, C.HISTORY_LIMIT) : [];
+  }
+
+  // Stored values survive closing the app, as on a real calculator.
+  function loadMemory() {
+    const saved = load(MEMORY_KEY) || {};
+    return Object.fromEntries(
+      C.VARIABLES.filter((name) => Number.isFinite(saved[name])).map((name) => [name, saved[name]])
+    );
   }
 
   function loadSettings() {
@@ -112,8 +124,12 @@
       if (!btn.dataset.label) btn.dataset.label = btn.textContent.trim();
       btn.textContent = inverse ? btn.dataset.invLabel : btn.dataset.label;
     });
+    stoBtn.setAttribute("aria-pressed", storing);
+    sciEl.classList.toggle("is-storing", storing);
     modeEl.textContent = settings.sci
-      ? [settings.angle.toUpperCase(), inverse && "INV"].filter(Boolean).join(" ")
+      ? [settings.angle.toUpperCase(), inverse && "INV", storing && "STO"]
+          .filter(Boolean)
+          .join(" ")
       : "";
   }
 
@@ -122,7 +138,20 @@
     el.style.fontSize = length > 10 ? `${Math.max(1.5, (3 * 10) / length)}rem` : "";
   }
 
+  // Each letter key shows its value in small print.
+  function renderMemory() {
+    let any = false;
+    for (const name of C.VARIABLES) {
+      const value = state.memory[name];
+      any ||= value !== 0;
+      const short = C.format(Number(value.toPrecision(4)));
+      document.querySelector(`[data-var="${name}"] .var-value`).textContent = short;
+    }
+    clearMemoryBtn.hidden = !any;
+  }
+
   function render() {
+    renderMemory();
     if (state.result !== null) {
       // After "=": the expression above, the answer big.
       expressionEl.textContent = state.resultExpression + " =";
@@ -184,11 +213,24 @@
       case "recall":
         state = C.insertNumber(state, value);
         break;
+      case "store":
+        state = C.store(state, value, settings.angle);
+        save(MEMORY_KEY, state.memory);
+        if (state.completed) {
+          history = C.addToHistory(history, state.completed);
+          save(HISTORY_KEY, history);
+          renderHistory();
+        }
+        break;
     }
     render();
   }
 
   function pressKey(btn) {
+    if (storing) {
+      storing = false; // any other key cancels STO
+      renderModes();
+    }
     if (btn.dataset.insert) handle("insert", tokenOf(btn));
     else if (btn.dataset.action) handle(btn.dataset.action);
   }
@@ -198,7 +240,11 @@
     if (btn) pressKey(btn);
   });
 
-  backspaceBtn.addEventListener("click", () => handle("backspace"));
+  backspaceBtn.addEventListener("click", () => {
+    storing = false;
+    renderModes();
+    handle("backspace");
+  });
 
   // Tap between two tokens to type or delete there. Tapping an answer goes
   // back to its expression.
@@ -222,7 +268,15 @@
   sciEl.addEventListener("click", (event) => {
     const btn = event.target.closest("button");
     if (!btn) return;
-    if (btn === invBtn) {
+    if (btn === stoBtn) {
+      storing = !storing;
+    } else if (btn === clearMemoryBtn) {
+      state = C.clearMemory(state);
+      save(MEMORY_KEY, state.memory);
+    } else if (storing && btn.dataset.var) {
+      storing = false;
+      handle("store", btn.dataset.var);
+    } else if (btn === invBtn) {
       inverse = !inverse;
     } else if (btn.dataset.angle) {
       settings.angle = btn.dataset.angle;
@@ -268,11 +322,23 @@
     n: '[data-insert="ln("]',
   };
   const letters = { r: "√(", p: "π", e: "e", a: "Ans" };
+  // Shift+A…F types a memory letter.
+  for (const name of C.VARIABLES) letters[name] = name;
 
   document.addEventListener("keydown", (event) => {
     // Leave browser shortcuts such as Ctrl+C alone.
     if (event.ctrlKey || event.metaKey || event.altKey) return;
     const { key } = event;
+    if (storing && key !== "Shift") {
+      // After STO, Shift+A…F stores; any other key cancels.
+      storing = false;
+      renderModes();
+      if (C.VARIABLES.includes(key)) {
+        handle("store", key);
+        event.preventDefault();
+        return;
+      }
+    }
     if (typed.has(key)) handle("insert", key);
     else if (key === ",") handle("insert", ".");
     else if (key === "Enter" || key === "=") handle("equals");
