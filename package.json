@@ -1,0 +1,19 @@
+{
+  "name": "clodo-calculator",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A Casio-style scientific and graphing calculator that runs in the browser and as an Android app.",
+  "scripts": {
+    "test": "node --test",
+    "build": "node scripts/build-web.mjs",
+    "android": "npm run build && npx cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.5.3",
+    "@capacitor/app": "8.1.2",
+    "@capacitor/core": "8.5.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.3"
+  }
+}

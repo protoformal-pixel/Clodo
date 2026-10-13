@@ -1403,8 +1403,42 @@
   renderGraph();
   renderStats();
 
-  // Makes the app installable and usable offline (see sw.js).
-  if ("serviceWorker" in navigator) {
+  // ---------------------------------------------------------------------
+  // Running as the Android app (Capacitor) rather than in a browser.
+
+  const native = window.Capacitor?.isNativePlatform?.() === true;
+  document.getElementById("about").textContent =
+    `Calculator ${window.APP_VERSION || ""} · ${native ? "Android app" : "web"}`;
+
+  // Android's back button steps back through what is open, and only leaves
+  // the app from the plain calculator.
+  function goBack() {
+    if (editing !== null) return stopEditing();
+    if (cell !== null) return stopCell();
+    if (solving) {
+      solving = null;
+      return renderGraph();
+    }
+    if (settings.graph || settings.stat) return setMode("calc");
+    if (storing || inverse) {
+      storing = false;
+      inverse = false;
+      renderModes();
+      return render();
+    }
+    return false; // nothing open: leave the app
+  }
+
+  if (native) {
+    const App = window.Capacitor.Plugins?.App ?? window.Capacitor.registerPlugin?.("App");
+    App?.addListener("backButton", () => {
+      if (goBack() === false) App.exitApp();
+    });
+  }
+
+  // Makes the web app installable and usable offline (see sw.js). The
+  // Android app already has its files, so it does not need this.
+  if (!native && "serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(() => {
       // Not supported here (e.g. opened as a local file); the page still works.
     });

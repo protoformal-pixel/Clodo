@@ -3,7 +3,7 @@
 // Network first: when online, every file is checked with the server, so a
 // newly deployed version shows up on the next launch (no 10-minute wait).
 // The copy saved here is only used when there is no connection.
-const CACHE = "calculator-v4";
+const CACHE = "calculator-v5";
 const FILES = [
   "./",
   "index.html",
@@ -13,6 +13,7 @@ const FILES = [
   "graph.js",
   "stats.js",
   "app.js",
+  "version.js",
   "manifest.webmanifest",
   "icons/icon.svg",
   "icons/icon-192.png",
