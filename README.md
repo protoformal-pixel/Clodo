@@ -6,8 +6,9 @@ New repository to work with Claude
 A simple calculator that runs in the browser with no dependencies or build step.
 
 - **Run it:** open `index.html` in a browser.
-- **History:** the last 10 calculations appear under the keys. Click one to reuse its
-  result. History is saved in your browser, so it survives a reload; **Clear** empties it.
+- **History:** press **History** (or `h`) to show the last 10 calculations under the keys.
+  Click one to reuse its result. History is saved in your browser, so it survives a
+  reload; **Clear** empties it.
 - **Order of operations:** `×` and `÷` come before `+` and `−`, and powers before both,
   so `2 + 3 × 4 = 14`.
 - **Scientific keys:** press **Sci** to show them: `sin` `cos` `tan`, `x²`, `xʸ`, `ln`,

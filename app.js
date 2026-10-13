@@ -8,6 +8,8 @@
   const modeEl = document.getElementById("mode");
   const sciEl = document.getElementById("sci");
   const sciToggle = document.getElementById("sci-toggle");
+  const historyEl = document.getElementById("history");
+  const historyToggle = document.getElementById("history-toggle");
   const invBtn = document.getElementById("inv");
   const historyList = document.getElementById("history-list");
   const historyEmpty = document.getElementById("history-empty");
@@ -17,7 +19,7 @@
   const SETTINGS_KEY = "calculator-settings";
   let state = C.createState();
   let history = loadHistory();
-  let settings = loadSettings(); // { sci: boolean, angle: "deg" | "rad" }
+  let settings = loadSettings(); // { sci, history: boolean, angle: "deg" | "rad" }
   let inverse = false;
 
   // History and settings are kept in this browser only. Storage can be
@@ -45,7 +47,11 @@
 
   function loadSettings() {
     const saved = load(SETTINGS_KEY) || {};
-    return { sci: saved.sci === true, angle: saved.angle === "rad" ? "rad" : "deg" };
+    return {
+      sci: saved.sci === true,
+      history: saved.history === true,
+      angle: saved.angle === "rad" ? "rad" : "deg",
+    };
   }
 
   // Internal tokens such as "*" and "root" shown as their key symbols.
@@ -91,6 +97,8 @@
   function renderModes() {
     sciEl.hidden = !settings.sci;
     sciToggle.setAttribute("aria-pressed", settings.sci);
+    historyEl.hidden = !settings.history;
+    historyToggle.setAttribute("aria-pressed", settings.history);
     invBtn.setAttribute("aria-pressed", inverse);
     document.querySelectorAll("[data-angle]").forEach((btn) => {
       btn.setAttribute("aria-pressed", btn.dataset.angle === settings.angle);
@@ -197,6 +205,12 @@
     renderModes();
   });
 
+  historyToggle.addEventListener("click", () => {
+    settings.history = !settings.history;
+    save(SETTINGS_KEY, settings);
+    renderModes();
+  });
+
   historyList.addEventListener("click", (event) => {
     const btn = event.target.closest("button");
     if (btn) handle("recall", btn.dataset.result);
@@ -232,6 +246,7 @@
     else if (key === "Escape") handle("clear");
     else if (key === "%") handle("percent");
     else if (key === "r") handle("function", "sqrt");
+    else if (key === "h") historyToggle.click();
     else if (shortcuts[key]) pressKey(document.querySelector(shortcuts[key]));
     else return;
     event.preventDefault();
