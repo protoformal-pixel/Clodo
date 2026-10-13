@@ -255,4 +255,11 @@
   renderModes();
   render();
   renderHistory();
+
+  // Makes the app installable and usable offline (see sw.js).
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("sw.js").catch(() => {
+      // Not supported here (e.g. opened as a local file); the page still works.
+    });
+  }
 })();
