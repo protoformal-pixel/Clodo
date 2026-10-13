@@ -5,6 +5,7 @@
   const C = window.Calculator;
   const G = window.Graph;
   const K = window.Calculus;
+  const S = window.Stats;
   const displayEl = document.getElementById("display");
   const backspaceBtn = document.getElementById("backspace");
   const sdBtn = document.getElementById("sd");
@@ -36,11 +37,20 @@
   const graphAngleBtn = document.getElementById("graph-angle");
   const gsolvEl = document.getElementById("gsolv");
   const solveResultEl = document.getElementById("solve-result");
+  const statEl = document.getElementById("stat");
+  const statToggle = document.getElementById("stat-toggle");
+  const dataBody = document.getElementById("data-body");
+  const statTools = document.getElementById("stat-tools");
+  const statResults = document.getElementById("stat-results");
+  const modelPicker = document.getElementById("model-picker");
+  const regressionEl = document.getElementById("regression");
+  const summaryEl = document.getElementById("summary");
   const symbols = { "+": "+", "-": "−", "*": "×", "/": "÷", "^": "^", root: "ʸ√" };
   const HISTORY_KEY = "calculator-history";
   const SETTINGS_KEY = "calculator-settings";
   const MEMORY_KEY = "calculator-memory";
   const GRAPH_KEY = "calculator-graph";
+  const STATS_KEY = "calculator-stats";
   const FUNCTION_COUNT = 3;
   let state = C.createState(0, loadMemory());
   let history = loadHistory();
@@ -54,6 +64,9 @@
   // G-Solv in progress: { kind, target, index } for root/min/max/isect, or
   // { kind: "integral", target, a, b, value } for ∫dx. null when idle.
   let solving = null;
+  // Statistics: rows of x and y, each a list of tokens like the display.
+  let stats = loadStats(); // { rows: [{ x, y }], model }
+  let cell = null; // the cell being typed: { row, col, editor }, or null
 
   // History and settings are kept in this browser only. Storage can be
   // unavailable (e.g. private browsing), so every access is guarded.
@@ -92,6 +105,7 @@
       sci: saved.sci === true,
       history: saved.history === true,
       graph: saved.graph === true,
+      stat: saved.stat === true && saved.graph !== true,
       angle: saved.angle === "rad" ? "rad" : "deg",
       // How answers are shown: "dec" 3.5, "frac" 7/2 or "mixed" 3 1/2.
       fraction: ["frac", "mixed"].includes(saved.fraction) ? saved.fraction : "dec",
@@ -113,7 +127,22 @@
       hidden: Array.from({ length: FUNCTION_COUNT }, (_, i) => saved.hidden?.[i] === true),
       view: validView ? v : null,
       table: saved.table === true,
+      data: saved.data === true, // show the statistics data points
+      fitData: false, // zoom to the data points on the next draw
     };
+  }
+
+  function loadStats() {
+    const saved = load(STATS_KEY) || {};
+    const isTokens = (t) => Array.isArray(t) && t.every((x) => typeof x === "string");
+    const rows = (Array.isArray(saved.rows) ? saved.rows : [])
+      .filter((r) => r && isTokens(r.x) && isTokens(r.y))
+      .map((r) => ({ x: r.x, y: r.y }));
+    return { rows, model: saved.model in S.MODELS ? saved.model : "lin" };
+  }
+
+  function saveStats() {
+    save(STATS_KEY, stats);
   }
 
   function saveGraph() {
@@ -122,6 +151,7 @@
       hidden: graph.hidden,
       view: graph.view,
       table: graph.table,
+      data: graph.data,
     });
   }
 
@@ -169,11 +199,16 @@
   }
 
   function renderModes() {
-    // In Graph mode the keypad only shows while a function is being typed.
+    // In Graph and Stat mode the keypad only shows while something is typed.
     const graphMode = settings.graph;
-    const keypad = !graphMode || editing !== null;
+    const statMode = settings.stat;
+    const keypad = (!graphMode && !statMode) || editing !== null || cell !== null;
     graphEl.hidden = !graphMode;
-    screenEl.hidden = graphMode;
+    statEl.hidden = !statMode;
+    screenEl.hidden = graphMode || statMode;
+    statTools.hidden = cell === null;
+    statResults.hidden = cell !== null;
+    statToggle.setAttribute("aria-pressed", statMode);
     keysEl.hidden = !keypad;
     fnTools.hidden = editing === null;
     plotEl.hidden = editing !== null;
@@ -182,8 +217,8 @@
     tableToggle.setAttribute("aria-pressed", graph.table);
     sciEl.hidden = !settings.sci || !keypad;
     sciToggle.setAttribute("aria-pressed", settings.sci);
-    historyEl.hidden = !settings.history || graphMode;
-    historyToggle.hidden = graphMode;
+    historyEl.hidden = !settings.history || graphMode || statMode;
+    historyToggle.hidden = graphMode || statMode;
     historyToggle.setAttribute("aria-pressed", settings.history);
     invBtn.setAttribute("aria-pressed", inverse);
     document.querySelectorAll("[data-angle]").forEach((btn) => {
@@ -200,7 +235,7 @@
       scientific && settings.angle.toUpperCase(),
       scientific && inverse && "INV",
       scientific && storing && "STO",
-      !graphMode && { frac: "FRAC", mixed: "MIXED" }[settings.fraction],
+      !graphMode && !statMode && { frac: "FRAC", mixed: "MIXED" }[settings.fraction],
     ]
       .filter(Boolean)
       .join(" ");
@@ -282,6 +317,7 @@
 
   function handle(action, value) {
     if (editing !== null) return editFunction(action, value);
+    if (cell !== null) return editCell(action, value);
     switch (action) {
       case "insert":
         state = C.insert(state, value);
@@ -402,8 +438,26 @@
         const compiled = editing === i ? null : compile(i);
         if (compiled?.error) row.append(span(compiled.error, "fn-error"));
         return row;
-      })
+      }),
+      ...dataRow()
     );
+  }
+
+  // A row for the statistics data points, when there are any.
+  function dataRow() {
+    const pairs = statValues().pairs;
+    if (!pairs.length) return [];
+    const row = document.createElement("li");
+    row.className = "fn-row data-row";
+    row.style.setProperty("--fn-color", "var(--key-text)");
+    const swatch = document.createElement("button");
+    swatch.className = "fn-swatch is-round";
+    swatch.dataset.toggle = "data";
+    swatch.setAttribute("aria-pressed", graph.data);
+    swatch.setAttribute("aria-label", "Show the data points on the graph");
+    swatch.title = "Show or hide";
+    row.append(swatch, span("Stat data", "fn-name"), span(`${pairs.length} points`, "fn-expr muted"));
+    return [row];
   }
 
   function curves() {
@@ -435,6 +489,12 @@
     const { width, height } = size();
     if (!width || !height) return;
     if (!graph.view) graph.view = G.standardView(width);
+    const pairs = statValues().pairs;
+    if (graph.fitData) {
+      graph.fitData = false;
+      if (pairs.length) graph.view = fitView(pairs, width, height);
+      saveGraph();
+    }
     const ratio = window.devicePixelRatio || 1;
     canvas.width = Math.round(width * ratio);
     canvas.height = Math.round(height * ratio);
@@ -454,7 +514,7 @@
       grid: color("--graph-grid"),
       axis: color("--graph-axis"),
       label: color("--muted"),
-    }, traceX, shade);
+    }, traceX, shade, graph.data && pairs.length ? { list: pairs, color: color("--key-text") } : null);
     renderSolve(shown);
     renderTrace(shown);
     renderTable(shown);
@@ -563,16 +623,28 @@
     renderFunctions();
   }
 
-  graphToggle.addEventListener("click", () => {
-    settings.graph = !settings.graph;
+  // Calculator, Graph and Stat are separate screens.
+  function setMode(mode) {
+    settings.graph = mode === "graph";
+    settings.stat = mode === "stat";
     save(SETTINGS_KEY, settings);
     editing = null;
+    cell = null;
     renderModes();
     renderGraph();
-  });
+    renderStats();
+  }
+
+  graphToggle.addEventListener("click", () => setMode(settings.graph ? "calc" : "graph"));
+  statToggle.addEventListener("click", () => setMode(settings.stat ? "calc" : "stat"));
 
   fnList.addEventListener("click", (event) => {
     const swatch = event.target.closest("[data-toggle]");
+    if (swatch?.dataset.toggle === "data") {
+      graph.data = !graph.data;
+      saveGraph();
+      return renderGraph();
+    }
     if (swatch) {
       const i = Number(swatch.dataset.toggle);
       graph.hidden[i] = !graph.hidden[i];
@@ -886,6 +958,311 @@
     return true;
   }
 
+  // ---------------------------------------------------------------------
+  // Statistics
+
+  // Each cell is worked out like the calculator, so 1/3 or 2π are fine.
+  function cellValue(tokens) {
+    if (!tokens.length) return { empty: true };
+    try {
+      const env = { angle: settings.angle, ans: state.ans, memory: state.memory };
+      return { value: C.calculate(tokens, env) };
+    } catch (e) {
+      if (!e.calcError) throw e;
+      return { error: e.calcError };
+    }
+  }
+
+  // xs: every x; pairs: rows with both x and y; errors: cells that failed.
+  function statValues() {
+    const xs = [];
+    const pairs = [];
+    const errors = [];
+    stats.rows.forEach((row, i) => {
+      const x = cellValue(row.x);
+      const y = cellValue(row.y);
+      if (x.error) errors.push(`Row ${i + 1} x: ${x.error}`);
+      if (y.error) errors.push(`Row ${i + 1} y: ${y.error}`);
+      if (x.value === undefined) {
+        if (y.value !== undefined) errors.push(`Row ${i + 1}: y without x`);
+        return;
+      }
+      xs.push(x.value);
+      if (y.value !== undefined) pairs.push([x.value, y.value]);
+    });
+    return { xs, pairs, errors };
+  }
+
+  // A view showing every point with a little room around them.
+  function fitView(pairs, width, height) {
+    const range = (values) => {
+      let lo = Math.min(...values);
+      let hi = Math.max(...values);
+      if (lo === hi) [lo, hi] = [lo - 1, hi + 1];
+      const pad = (hi - lo) * 0.15;
+      return [lo - pad, hi + pad];
+    };
+    const [xmin, xmax] = range(pairs.map((p) => p[0]));
+    const [ymin, ymax] = range(pairs.map((p) => p[1]));
+    return {
+      cx: (xmin + xmax) / 2,
+      cy: (ymin + ymax) / 2,
+      sx: (xmax - xmin) / width,
+      sy: (ymax - ymin) / height,
+    };
+  }
+
+  // Ten significant digits on screen; the full value when used.
+  const short = (v) => C.format(Number(v.toPrecision(10)));
+
+  function valueButton(label, value) {
+    const btn = document.createElement("button");
+    btn.className = "stat-value";
+    btn.title = "Use in the calculator";
+    const ok = Number.isFinite(value);
+    if (ok) btn.dataset.value = C.format(value);
+    else btn.disabled = true;
+    btn.append(span(label, "stat-label"), span(ok ? short(value) : "—", "val"));
+    return btn;
+  }
+
+  let currentFit = null; // the regression on screen, for Copy to graph
+
+  function renderStats() {
+    if (statEl.hidden) return;
+    renderDataTable();
+    if (cell !== null) return;
+    const { xs, pairs, errors } = statValues();
+
+    modelPicker.querySelectorAll("[data-model]").forEach((btn) => {
+      btn.setAttribute("aria-pressed", btn.dataset.model === stats.model);
+    });
+
+    // Regression, when there are pairs.
+    const parts = [];
+    currentFit = null;
+    if (errors.length) parts.push(span(errors.join(" · "), "stat-error"));
+    if (!pairs.length) {
+      const note = xs.length ? "Add y values to fit a curve." : "Tap a cell to enter data.";
+      parts.push(span(note, "stat-note"));
+    } else {
+      const model = S.MODELS[stats.model];
+      const fit = S.regression(stats.model, pairs.map((p) => p[0]), pairs.map((p) => p[1]));
+      parts.push(span(`${model.name}: ${model.formula}`, "stat-formula"));
+      if (fit.error) parts.push(span(fit.error, "stat-error"));
+      else {
+        currentFit = fit;
+        const grid = document.createElement("div");
+        grid.className = "stat-grid";
+        for (const [name, v] of Object.entries(fit.coefficients)) grid.append(valueButton(name, v));
+        if (fit.r !== undefined) grid.append(valueButton("r", fit.r), valueButton("r²", fit.r * fit.r));
+        if (fit.r2 !== undefined) grid.append(valueButton("R²", fit.r2));
+        const copy = document.createElement("button");
+        copy.id = "copy-fit";
+        copy.className = "chip copy-fit";
+        copy.textContent = "Copy to graph";
+        parts.push(grid, copy);
+      }
+    }
+    regressionEl.replaceChildren(...parts);
+
+    // One-variable summaries for x, and for y when there is any.
+    const ys = pairs.map((p) => p[1]);
+    const columns = [["x", S.oneVar(xs)], ["y", S.oneVar(ys)]].filter(([, s]) => s);
+    const rows = [
+      ["n", "n"], ["mean", null], ["sum", "Σ"], ["sumSquares", "Σ²"], ["popSD", "σ"],
+      ["sampleSD", "s"], ["min", "min"], ["q1", "Q1"], ["median", "Med"], ["q3", "Q3"],
+      ["max", "max"],
+    ];
+    summaryEl.replaceChildren(
+      ...columns.map(([name, summary]) => {
+        const col = document.createElement("div");
+        col.className = "stat-column";
+        col.append(span(name, "stat-heading"));
+        for (const [key, label] of rows) {
+          col.append(valueButton(label ?? (name === "x" ? "x̄" : "ȳ"), summary[key]));
+        }
+        return col;
+      })
+    );
+  }
+
+  function renderDataTable() {
+    const cellEl = (rowIndex, col, tokens) => {
+      const td = document.createElement("td");
+      td.className = "data-cell";
+      td.dataset.row = rowIndex;
+      td.dataset.col = col;
+      const isEditing = cell !== null && cell.row === rowIndex && cell.col === col;
+      td.classList.toggle("is-editing", isEditing);
+      const text = document.createElement("div");
+      text.className = "cell-text";
+      if (isEditing) renderTokens(text, cell.editor.tokens, cell.editor.cursor, true);
+      else if (tokens.length) {
+        renderTokens(text, tokens, null, false);
+        if (cellValue(tokens).error) td.classList.add("has-error");
+      }
+      td.append(text);
+      return td;
+    };
+    const rows = [...stats.rows, { x: [], y: [] }].map((row, i) => {
+      const tr = document.createElement("tr");
+      const last = i === stats.rows.length;
+      tr.classList.toggle("new-row", last);
+      const th = document.createElement("th");
+      th.scope = "row";
+      th.textContent = last ? "+" : String(i + 1);
+      tr.append(th, cellEl(i, "x", row.x), cellEl(i, "y", row.y));
+      return tr;
+    });
+    dataBody.replaceChildren(...rows);
+  }
+
+  function startCell(row, col) {
+    if (cell) commitCell();
+    const tokens = (stats.rows[row] && stats.rows[row][col]) || [];
+    cell = { row, col, editor: { ...C.createState(), tokens } };
+    renderModes();
+    renderStats();
+    dataBody.querySelector(".is-editing")?.scrollIntoView({ block: "nearest" });
+  }
+
+  // Keep what was typed; a row emptied of both values goes away.
+  function commitCell() {
+    const { row, col, editor } = cell;
+    if (row === stats.rows.length) {
+      if (!editor.tokens.length) return;
+      stats.rows.push({ x: [], y: [] });
+    }
+    stats.rows[row][col] = editor.tokens;
+    if (!stats.rows[row].x.length && !stats.rows[row].y.length) stats.rows.splice(row, 1);
+    saveStats();
+  }
+
+  function stopCell() {
+    commitCell();
+    cell = null;
+    graph.fitData = true; // the data may have changed
+    renderModes();
+    renderStats();
+  }
+
+  // = or Next: x → y on the same row, then x on the next row, as on a Casio.
+  function nextCell() {
+    const { row, col, editor } = cell;
+    const other = col === "x" ? "y" : "x";
+    const removed =
+      row < stats.rows.length && !editor.tokens.length && !stats.rows[row][other].length;
+    commitCell();
+    cell = null;
+    if (removed) return startCell(row, "x");
+    if (col === "x") startCell(row, "y");
+    else startCell(Math.min(row + 1, stats.rows.length), "x");
+  }
+
+  function editCell(action, value) {
+    const editor = cell.editor;
+    switch (action) {
+      case "insert":
+        cell.editor = C.insert(editor, value);
+        break;
+      case "recall":
+        cell.editor = C.insertNumber(editor, value);
+        break;
+      case "backspace":
+        cell.editor = C.backspace(editor);
+        break;
+      case "clear":
+        cell.editor = { ...editor, tokens: [], cursor: null };
+        break;
+      case "cursor":
+        cell.editor = C.moveCursor(editor, value);
+        break;
+      case "setCursor":
+        cell.editor = C.setCursor(editor, value);
+        break;
+      case "equals":
+        return nextCell();
+    }
+    renderDataTable();
+  }
+
+  // The fitted curve as tokens for a graph function.
+  function fitTokens(kind, c) {
+    const num = (v) => C.insertNumber(C.createState(), C.format(v)).tokens;
+    const term = (v) => (v < 0 ? ["-", ...num(-v)] : ["+", ...num(v)]);
+    switch (kind) {
+      case "lin":
+        return [...num(c.a), ...term(c.b), "x"];
+      case "quad":
+        return [...num(c.a), ...term(c.b), "x", ...term(c.c), "x", "²"];
+      case "log":
+        return [...num(c.a), ...term(c.b), "ln(", "x", ")"];
+      case "exp":
+        return [...num(c.a), "e^(", ...num(c.b), "x", ")"];
+      case "pow":
+        return [...num(c.a), "x", "^", "(", ...num(c.b), ")"];
+    }
+  }
+
+  // Put the fitted curve in the first free y (or y3) and show it with the data.
+  function copyFitToGraph(fit) {
+    let slot = graph.editors.findIndex((e) => !e.tokens.length);
+    if (slot < 0) slot = graph.editors.length - 1;
+    graph.editors[slot] = { ...C.createState(), tokens: fitTokens(stats.model, fit.coefficients) };
+    graph.hidden[slot] = false;
+    graph.data = true;
+    graph.fitData = true;
+    solving = null;
+    traceX = null;
+    saveGraph();
+    setMode("graph");
+  }
+
+  dataBody.addEventListener("click", (event) => {
+    const td = event.target.closest(".data-cell");
+    if (!td) return;
+    const row = Number(td.dataset.row);
+    const col = td.dataset.col;
+    if (cell && cell.row === row && cell.col === col) {
+      const text = td.querySelector(".cell-text");
+      return handle("setCursor", tapIndex(text, event, cell.editor.tokens.length));
+    }
+    startCell(row, col);
+  });
+
+  statTools.addEventListener("click", (event) => {
+    const btn = event.target.closest("button");
+    if (!btn) return;
+    if (btn.id === "cell-done") stopCell();
+    else if (btn.id === "cell-next") nextCell();
+    else if (btn.id === "cell-backspace") handle("backspace");
+  });
+
+  modelPicker.addEventListener("click", (event) => {
+    const btn = event.target.closest("[data-model]");
+    if (!btn) return;
+    stats.model = btn.dataset.model;
+    saveStats();
+    renderStats();
+  });
+
+  statResults.addEventListener("click", (event) => {
+    if (event.target.closest("#copy-fit") && currentFit) return copyFitToGraph(currentFit);
+    if (event.target.closest("#clear-data")) {
+      if (!stats.rows.length || !confirm("Clear all the data?")) return;
+      stats.rows = [];
+      saveStats();
+      return renderStats();
+    }
+    // Tap a value: back to the calculator with it typed in.
+    const value = event.target.closest(".stat-value");
+    if (value && !value.disabled) {
+      setMode("calc");
+      handle("recall", value.dataset.value);
+    }
+  });
+
   function pressKey(btn) {
     if (storing) {
       storing = false; // any other key cancels STO
@@ -1000,6 +1377,7 @@
         return;
       }
     }
+    if (settings.stat && cell === null) return; // nothing to type into
     if (settings.graph && editing === null) {
       if (graphKey(key)) event.preventDefault();
       return;
@@ -1023,6 +1401,7 @@
   render();
   renderHistory();
   renderGraph();
+  renderStats();
 
   // Makes the app installable and usable offline (see sw.js).
   if ("serviceWorker" in navigator) {
