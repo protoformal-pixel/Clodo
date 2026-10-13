@@ -49,6 +49,16 @@ A simple calculator that runs in the browser with no dependencies or build step.
     to switch to another function. Taps snap to round x values.
   - Tap a colour square to hide or show that function. Functions, the view and the
     settings are kept after closing the app.
+- **Statistics:** press **Stat** for a table of x and y values. Tap a cell and type with
+  the keypad (expressions like `1/3` work); `=` or **Next** moves x → y → next row, **Done**
+  finishes, and emptying both cells of a row removes it.
+  - Summary for x (and y): n, mean, Σ, Σ², σ (population), s (sample), min, Q1, median,
+    Q3, max. Quartiles leave out the middle value for an odd count, as on a Casio.
+  - Regression: **Lin** `a+bx`, **Quad** `a+bx+cx²`, **Log** `a+b·ln x`, **Exp** `a·e^(bx)`,
+    **Pow** `a·x^b`, with the coefficients and r (R² for Quad).
+  - **Copy to graph** puts the fitted curve in the first free y and shows the data points
+    on the graph, zoomed to fit; the round swatch hides or shows the points.
+  - Tap any value to use it in the calculator. Data is kept after closing the app.
 - **Fixing typos:** **⌫** deletes the last key (`sin(` goes in one press). Tap between
   two parts of the expression (or use `←` `→`) to type or delete there. After a result,
   tap it, or press **⌫** or an arrow, to go back to the expression and change it.
@@ -76,6 +86,7 @@ Files:
 - `app.js`: connects the logic to the buttons and keyboard.
 - `index.html`, `style.css`: the page layout and styles.
 - `calculus.js`: numerical integrals, derivatives, Solve, roots and extremes.
+- `stats.js`: one-variable summaries and regression.
 - `graph.js`: graph helpers (view, axis ticks, sampling curves, drawing), no page code.
-- `calculator.test.js`, `calculus.test.js`, `graph.test.js`: unit tests.
+- `calculator.test.js`, `calculus.test.js`, `graph.test.js`, `stats.test.js`: unit tests.
 - `manifest.webmanifest`, `sw.js`, `icons/`: make it installable and usable offline.

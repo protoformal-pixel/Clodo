@@ -22,6 +22,7 @@
             History
           </button>
           <button id="graph-toggle" class="chip" aria-pressed="false">Graph</button>
+          <button id="stat-toggle" class="chip" aria-pressed="false">Stat</button>
         </div>
         <span id="mode" class="mode"></span>
       </div>
@@ -59,6 +60,41 @@
           <p class="trace" id="trace" aria-live="polite"></p>
           <div class="table-wrap" id="table-wrap" hidden>
             <table class="value-table" id="value-table"></table>
+          </div>
+        </div>
+      </section>
+      <section class="stat" id="stat" aria-label="Statistics" hidden>
+        <div class="data-wrap" id="data-wrap">
+          <table class="data-table">
+            <thead>
+              <tr><th scope="col">#</th><th scope="col">x</th><th scope="col">y</th></tr>
+            </thead>
+            <tbody id="data-body"></tbody>
+          </table>
+        </div>
+        <div class="fn-tools" id="stat-tools" hidden>
+          <button id="cell-backspace" class="backspace" aria-label="Delete" title="Delete">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M9 5h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-6-7z" />
+              <path d="M12 9.5l5 5M17 9.5l-5 5" />
+            </svg>
+          </button>
+          <button id="cell-next" class="chip next">Next ↵</button>
+          <button id="cell-done" class="chip done">Done</button>
+        </div>
+        <div class="stat-results" id="stat-results">
+          <div class="graph-toolbar" id="model-picker" role="group" aria-label="Regression model">
+            <button data-model="lin" title="y = a + bx">Lin</button>
+            <button data-model="quad" title="y = a + bx + cx²">Quad</button>
+            <button data-model="log" title="y = a + b·ln x">Log</button>
+            <button data-model="exp" title="y = a·e^(bx)">Exp</button>
+            <button data-model="pow" title="y = a·x^b">Pow</button>
+          </div>
+          <div class="regression" id="regression" aria-live="polite"></div>
+          <div class="summary" id="summary"></div>
+          <p class="stat-hint">Tap a value to use it in the calculator.</p>
+          <div class="stat-actions">
+            <button id="clear-data" class="link">Clear data</button>
           </div>
         </div>
       </section>
@@ -187,6 +223,7 @@
     <script src="calculus.js"></script>
     <script src="calculator.js"></script>
     <script src="graph.js"></script>
+    <script src="stats.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

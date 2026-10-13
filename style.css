@@ -701,3 +701,198 @@ button:focus-visible {
 .display .whole {
   margin-right: 0.12em;
 }
+
+/* Statistics */
+
+.stat {
+  margin-top: 8px;
+}
+
+.data-wrap {
+  max-height: 260px;
+  overflow: auto;
+  border-radius: 12px;
+  background: var(--key);
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--key-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.data-table th {
+  position: sticky;
+  top: 0;
+  padding: 6px 8px;
+  background: var(--key);
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.data-table tbody th {
+  position: static;
+  width: 2.5em;
+  text-align: center;
+}
+
+.data-cell {
+  padding: 2px 4px;
+  border-top: 1px solid var(--panel);
+  cursor: text;
+}
+
+.data-cell .cell-text {
+  min-height: 34px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  text-align: right;
+  font-size: 1.05rem;
+  overflow-wrap: anywhere;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.data-cell.is-editing .cell-text {
+  background: var(--panel);
+  box-shadow: inset 0 0 0 2px var(--op);
+}
+
+.data-cell.has-error .cell-text {
+  box-shadow: inset 0 0 0 2px var(--op);
+  color: var(--op);
+}
+
+.new-row th {
+  color: var(--op);
+}
+
+.fn-tools .next {
+  margin-left: auto;
+  padding: 8px 14px;
+}
+
+.fn-tools .next + .done {
+  margin-left: 0;
+}
+
+#model-picker {
+  margin-top: 12px;
+}
+
+#model-picker button[aria-pressed="true"] {
+  background: var(--op);
+  color: var(--op-text);
+}
+
+.regression {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.stat-formula {
+  color: var(--key-text);
+  font-weight: 600;
+}
+
+.stat-error {
+  color: var(--op);
+  font-weight: 600;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 6px;
+}
+
+.stat-value {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  height: auto;
+  padding: 6px 10px;
+  aspect-ratio: auto;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  text-align: left;
+}
+
+.stat-value .stat-label {
+  color: var(--muted);
+}
+
+.stat-value .val {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.copy-fit {
+  justify-self: start;
+  padding: 8px 16px;
+  background: var(--op);
+  color: var(--op-text);
+}
+
+.summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.stat-column {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+}
+
+.stat-heading {
+  padding: 0 4px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.stat-hint {
+  margin: 10px 2px 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.stat-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.stat-actions .link {
+  padding: 4px 8px;
+  aspect-ratio: auto;
+  background: none;
+  color: var(--op);
+  font-size: 0.9rem;
+}
+
+/* Data points in the function list: a round swatch. */
+.fn-swatch.is-round {
+  border-radius: 50%;
+}
+
+.fn-expr.muted {
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.top-bar .toggles {
+  flex-wrap: wrap;
+}

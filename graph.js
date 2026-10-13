@@ -116,7 +116,8 @@
   //   curves: [{ f, color }]
   //   colors: { surface, grid, axis, label }
   //   shade: { f, a, b, color } fills between the curve and y = 0 from a to b
-  function draw(ctx, width, height, view, curves, colors, traceX, shade) {
+  //   points: { list: [[x, y]], color } data points from statistics
+  function draw(ctx, width, height, view, curves, colors, traceX, shade, points) {
     const b = bounds(view, width, height);
     const X = (x) => (x - b.xmin) / view.sx;
     // Keep far-off points finite for the canvas.
@@ -212,6 +213,23 @@
         piece.forEach(([x, y], i) => (i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y))));
       }
       ctx.stroke();
+    }
+
+    // Data points: 8 px dots with a ring in the surface colour so they stay
+    // distinct where a curve passes through them.
+    if (points) {
+      for (const [x, y] of points.list) {
+        const px = X(x);
+        const py = Y(y);
+        if (px < -5 || px > width + 5 || py < -5 || py > height + 5) continue;
+        ctx.beginPath();
+        ctx.arc(px, py, 4, 0, 2 * Math.PI);
+        ctx.fillStyle = points.color;
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = colors.surface;
+        ctx.stroke();
+      }
     }
 
     // Trace: a dashed line at x and a dot on each curve.
