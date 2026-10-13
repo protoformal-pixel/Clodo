@@ -77,7 +77,23 @@ A simple calculator that runs in the browser with no dependencies or build step.
 
   The installed app opens in its own window and works offline. When online, it always
   loads the newest deployed version.
-- **Test it:** `node --test` (needs Node 18 or newer).
+- **Android app:** every push builds an `.apk` with [Capacitor](https://capacitorjs.com) on
+  GitHub Actions (see `.github/workflows/android.yml`); nothing needs installing locally.
+  Merges to `main` publish it as **Android test build** on the Releases page, with a fixed
+  link for phones:
+  https://github.com/protoformal-pixel/Clodo/releases/download/android-latest/Calculator.apk
+  - Open the link on the phone, then open the downloaded file. Android asks to allow
+    installing apps from the browser; allow it for this install.
+  - Test builds are signed with a shared test key (`android/app/test-signing.keystore`),
+    so each one installs over the last and keeps the app's data. A Play Store release
+    would need its own private key instead.
+  - The app's data (history, memory, graphs, statistics) is separate from the browser's.
+  - Android's back button closes what is open (editing, Graph or Stat) before leaving
+    the app. The version and build number are shown at the bottom.
+  - To build it yourself: `npm install`, `npm run android`, then open `android/` in Android
+    Studio. App icons and splash screens come from `assets/` via
+    `npx @capacitor/assets generate --android`.
+- **Test it:** `npm test` (or `node --test`; needs Node 18 or newer).
 
 Files:
 
@@ -90,3 +106,7 @@ Files:
 - `graph.js`: graph helpers (view, axis ticks, sampling curves, drawing), no page code.
 - `calculator.test.js`, `calculus.test.js`, `graph.test.js`, `stats.test.js`: unit tests.
 - `manifest.webmanifest`, `sw.js`, `icons/`: make it installable and usable offline.
+- `version.js`: the version shown in the app (keep in step with `package.json`).
+- `package.json`, `capacitor.config.json`, `android/`, `assets/`, `scripts/build-web.mjs`,
+  `.github/workflows/android.yml`: the Android app and its build.
+- `project.test.js`: checks that every file the page loads is packaged and cached.
