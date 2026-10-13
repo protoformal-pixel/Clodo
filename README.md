@@ -101,7 +101,12 @@ Files:
 
 - `calculator.js`: the calculator logic (expression parser and evaluator), with no page
   code, so it can be tested.
-- `app.js`: connects the logic to the buttons and keyboard.
+- The page script, split by screen (loaded in this order, sharing `window.CalculatorUI`):
+  - `app-core.js`: settings, storage, small display helpers, switching screens.
+  - `app-calc.js`: the calculator: display, keypad, Sci panel, memory, history, fractions.
+  - `app-graph.js`: graph mode, G-Solv and the table of values.
+  - `app-stat.js`: statistics mode.
+  - `app-main.js`: keyboard shortcuts, the Android back button, start-up.
 - `index.html`, `style.css`: the page layout and styles.
 - `calculus.js`: numerical integrals, derivatives, Solve, roots and extremes.
 - `stats.js`: one-variable summaries and regression.
