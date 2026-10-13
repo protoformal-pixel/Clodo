@@ -113,3 +113,77 @@ button:focus-visible {
   text-align: left;
   padding-left: 28px;
 }
+
+.history {
+  margin-top: 20px;
+  padding-top: 12px;
+  border-top: 1px solid var(--key);
+}
+
+.history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.history h2 {
+  margin: 0 0 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.history-empty {
+  margin: 4px 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.history-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.history .link,
+.history-entry {
+  aspect-ratio: auto;
+  border-radius: 8px;
+  background: none;
+  color: var(--key-text);
+  font-size: 1rem;
+}
+
+.history .link {
+  padding: 2px 6px;
+  color: var(--op);
+  font-size: 0.9rem;
+}
+
+.history-entry {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.history-entry:hover {
+  filter: none;
+  background: var(--key);
+}
+
+.history-expression {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.history-result {
+  font-weight: 600;
+  white-space: nowrap;
+}

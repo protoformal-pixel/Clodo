@@ -35,6 +35,14 @@
         <button data-action="decimal">.</button>
         <button data-action="equals" class="op">=</button>
       </div>
+      <section class="history" aria-label="History">
+        <div class="history-header">
+          <h2>History</h2>
+          <button id="clear-history" class="link" hidden>Clear</button>
+        </div>
+        <p id="history-empty" class="history-empty">No calculations yet</p>
+        <ol id="history-list" class="history-list"></ol>
+      </section>
     </main>
     <script src="calculator.js"></script>
     <script src="app.js"></script>
