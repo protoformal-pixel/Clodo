@@ -9,7 +9,12 @@
   <body>
     <main class="calculator" aria-label="Calculator">
       <div class="top-bar">
-        <button id="sci-toggle" class="chip" aria-pressed="false">Sci</button>
+        <div class="toggles">
+          <button id="sci-toggle" class="chip" aria-pressed="false">Sci</button>
+          <button id="history-toggle" class="chip" aria-pressed="false">
+            History
+          </button>
+        </div>
         <span id="mode" class="mode"></span>
       </div>
       <div class="expression" id="expression" aria-hidden="true"></div>
@@ -75,7 +80,7 @@
         <button data-action="decimal">.</button>
         <button data-action="equals" class="op">=</button>
       </div>
-      <section class="history" aria-label="History">
+      <section class="history" id="history" aria-label="History" hidden>
         <div class="history-header">
           <h2>History</h2>
           <button id="clear-history" class="link" hidden>Clear</button>

@@ -203,6 +203,11 @@ button:focus-visible {
   font-size: 1rem;
 }
 
+.toggles {
+  display: flex;
+  gap: 6px;
+}
+
 .chip {
   padding: 4px 12px;
   font-size: 0.85rem;
