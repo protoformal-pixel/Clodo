@@ -7,6 +7,7 @@
   const K = window.Calculus;
   const displayEl = document.getElementById("display");
   const backspaceBtn = document.getElementById("backspace");
+  const sdBtn = document.getElementById("sd");
   const expressionEl = document.getElementById("expression");
   const previewEl = document.getElementById("preview");
   const modeEl = document.getElementById("mode");
@@ -92,6 +93,8 @@
       history: saved.history === true,
       graph: saved.graph === true,
       angle: saved.angle === "rad" ? "rad" : "deg",
+      // How answers are shown: "dec" 3.5, "frac" 7/2 or "mixed" 3 1/2.
+      fraction: ["frac", "mixed"].includes(saved.fraction) ? saved.fraction : "dec",
     };
   }
 
@@ -192,11 +195,15 @@
     });
     stoBtn.setAttribute("aria-pressed", storing);
     sciEl.classList.toggle("is-storing", storing);
-    modeEl.textContent = settings.sci || graphMode
-      ? [settings.angle.toUpperCase(), inverse && "INV", storing && "STO"]
-          .filter(Boolean)
-          .join(" ")
-      : "";
+    const scientific = settings.sci || graphMode;
+    modeEl.textContent = [
+      scientific && settings.angle.toUpperCase(),
+      scientific && inverse && "INV",
+      scientific && storing && "STO",
+      !graphMode && { frac: "FRAC", mixed: "MIXED" }[settings.fraction],
+    ]
+      .filter(Boolean)
+      .join(" ");
   }
 
   // Shrink long text so it stays on one line, down to half size.
@@ -216,12 +223,34 @@
     clearMemoryBtn.hidden = !any;
   }
 
+  // An answer like 7/2 or −3 1/2 is shown as a stacked fraction.
+  function resultParts(text) {
+    const m = text.match(/^(-?)(?:(\d+) )?(\d+)\/(\d+)$/);
+    if (!m) return [span(text)];
+    const [, minus, whole, n, d] = m;
+    const frac = span("", "frac");
+    frac.append(span(n, "num"), span(d, "den"));
+    frac.setAttribute("aria-label", `${n} over ${d}`);
+    return [minus && span("−"), whole && span(whole, "whole"), frac].filter(Boolean);
+  }
+
+  // S⇔D: decimal → fraction → mixed number → decimal. The choice is kept
+  // for later answers too.
+  function switchFraction() {
+    const order = ["dec", "frac", "mixed"];
+    settings.fraction = order[(order.indexOf(settings.fraction) + 1) % order.length];
+    save(SETTINGS_KEY, settings);
+    state = C.restyle(state, settings.fraction);
+    renderModes();
+    render();
+  }
+
   function render() {
     renderMemory();
     if (state.result !== null) {
       // After "=": the expression above, the answer big.
       expressionEl.textContent = state.resultExpression + " =";
-      displayEl.replaceChildren(span(state.result));
+      displayEl.replaceChildren(...resultParts(state.result));
       displayEl.classList.add("is-result");
       fit(displayEl, state.result.length);
       previewEl.textContent = "";
@@ -246,7 +275,7 @@
     displayEl.replaceChildren(...parts);
     fit(displayEl, C.toText(state.tokens).length);
 
-    const preview = C.preview(state, settings.angle);
+    const preview = C.preview(state, settings.angle, settings.fraction);
     previewEl.textContent = state.error || (preview === null ? "" : "= " + preview);
     previewEl.classList.toggle("is-error", Boolean(state.error));
   }
@@ -258,7 +287,7 @@
         state = C.insert(state, value);
         break;
       case "equals":
-        state = C.equals(state, settings.angle);
+        state = C.equals(state, settings.angle, settings.fraction);
         if (state.completed) {
           history = C.addToHistory(history, state.completed);
           save(HISTORY_KEY, history);
@@ -281,7 +310,7 @@
         state = C.insertNumber(state, value);
         break;
       case "store":
-        state = C.store(state, value, settings.angle);
+        state = C.store(state, value, settings.angle, settings.fraction);
         save(MEMORY_KEY, state.memory);
         if (state.completed) {
           history = C.addToHistory(history, state.completed);
@@ -953,6 +982,7 @@
     n: '[data-insert="ln("]',
   };
   const letters = { r: "√(", p: "π", e: "e", a: "Ans", x: "x", i: "∫(", d: "d/dx(" };
+  sdBtn.addEventListener("click", switchFraction);
   // Shift+A…F types a memory letter.
   for (const name of C.VARIABLES) letters[name] = name;
 
@@ -982,6 +1012,7 @@
     else if (key === "ArrowRight") handle("cursor", 1);
     else if (key === "Escape") handle("clear");
     else if (key === "h") historyToggle.click();
+    else if (key === "f") switchFraction();
     else if (letters[key]) handle("insert", letters[key]);
     else if (shortcuts[key]) pressKey(document.querySelector(shortcuts[key]));
     else return;

@@ -9,13 +9,13 @@ const TOKEN_PATTERN =
 // Type keys and return the final state. "=" evaluates, "<" is ⌫, "[" and
 // "]" move the cursor, "→A" stores in A. Operators use the internal tokens:
 // * / - root neg.
-function run(keys, { state = C.createState(), angle = "deg" } = {}) {
+function run(keys, { state = C.createState(), angle = "deg", style = "dec" } = {}) {
   for (const key of keys.match(TOKEN_PATTERN)) {
-    if (key === "=") state = C.equals(state, angle);
+    if (key === "=") state = C.equals(state, angle, style);
     else if (key === "<") state = C.backspace(state);
     else if (key === "[") state = C.moveCursor(state, -1);
     else if (key === "]") state = C.moveCursor(state, 1);
-    else if (key.startsWith("→")) state = C.store(state, key[1], angle);
+    else if (key.startsWith("→")) state = C.store(state, key[1], angle, style);
     else state = C.insert(state, key);
   }
   return state;
@@ -302,4 +302,50 @@ test("calculus errors", () => {
   assert.strictEqual(calc("Solve(x,1,2)"), "Syntax Error");
   assert.strictEqual(calc("2,3"), "Syntax Error");
   assert.strictEqual(C.toText(run("∫(x²,0,3)").tokens), "∫(x²,0,3)");
+});
+
+test("fractions: finding them", () => {
+  assert.deepStrictEqual(C.toFraction(0.5), { n: 1, d: 2 });
+  assert.deepStrictEqual(C.toFraction(2 / 3), { n: 2, d: 3 });
+  assert.deepStrictEqual(C.toFraction(-3.5), { n: -7, d: 2 });
+  assert.deepStrictEqual(C.toFraction(1 / 7 + 1 / 11), { n: 18, d: 77 });
+  assert.deepStrictEqual(C.toFraction(0.1 + 0.2), { n: 3, d: 10 });
+  assert.deepStrictEqual(C.toFraction(5), { n: 5, d: 1 });
+  assert.deepStrictEqual(C.toFraction(0), { n: 0, d: 1 });
+  // No small fraction is this close to these.
+  for (const x of [Math.SQRT2, Math.PI, Math.E, 1 / 12347, 1e-5, 0.1234567]) {
+    assert.strictEqual(C.toFraction(x), null, String(x));
+  }
+});
+
+test("fractions: answers in each style", () => {
+  const frac = (e) => calc(e, { style: "frac" });
+  const mixed = (e) => calc(e, { style: "mixed" });
+  assert.strictEqual(frac("1/3+1/6"), "1/2");
+  assert.strictEqual(calc("1/3+1/6"), "0.5"); // decimal is the default
+  assert.strictEqual(frac("2/3*3/4"), "1/2");
+  assert.strictEqual(frac("7/2"), "7/2");
+  assert.strictEqual(mixed("7/2"), "3 1/2");
+  assert.strictEqual(mixed("-7/2"), "-3 1/2");
+  assert.strictEqual(mixed("1/2"), "1/2"); // nothing whole to split off
+  assert.strictEqual(frac("2.5"), "5/2");
+  assert.strictEqual(frac("4/2"), "2");
+  assert.strictEqual(frac("√(2)"), "1.41421356237");
+  assert.strictEqual(frac("1/12347"), "0.0000809913339273"); // too big a denominator
+  assert.strictEqual(C.preview(run("1/3+1/6"), "deg", "frac"), "1/2");
+});
+
+test("fractions: S⇔D on the answer, and reusing fractions", () => {
+  const done = run("1/3+1/4=");
+  assert.strictEqual(done.result, "0.583333333333");
+  assert.strictEqual(C.restyle(done, "frac").result, "7/12");
+  assert.strictEqual(C.restyle(C.restyle(done, "frac"), "dec").result, "0.583333333333");
+  // The answer keeps full precision whatever the style.
+  assert.strictEqual(run("*12=", { state: C.restyle(done, "frac") }).result, "7");
+  // Fractions from history go back in as one number.
+  for (const [text, value] of [["7/2", "7"], ["-7/2", "-7"], ["3 1/2", "7"], ["-3 1/2", "-7"]]) {
+    assert.strictEqual(C.equals(C.insertNumber(run("2*"), text)).result, value, text);
+  }
+  assert.strictEqual(C.toText(C.insertNumber(run("2*"), "3 1/2").tokens), "2×((3+1÷2))");
+  assert.strictEqual(run("1/2→A", { style: "frac" }).result, "1/2");
 });

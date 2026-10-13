@@ -9,6 +9,10 @@ A simple calculator that runs in the browser with no dependencies or build step.
 - **Typing a calculation:** type the whole expression, as on a Casio, and press `=`:
   `2×(3+4)²−sin(30) = 97.5`. The answer so far appears under the expression while you
   type. Brackets left open at the end are closed for you.
+- **Fractions:** type them with `÷`. **S⇔D** (next to ⌫, or `f`) switches the answer between
+  decimal `3.5`, fraction `7/2` and mixed number `3 1/2`, shown stacked; the choice is kept
+  for later answers (`FRAC` / `MIXED` at the top). `1÷3+1÷6 = 1/2`. Answers that are not
+  exact fractions with a denominator up to 9999, like `√2` or `π`, stay decimals.
 - **Order of operations:** brackets first, then powers, then `×` and `÷`, then `+` and
   `−`. Multiplication without a sign binds tighter than `×` and `÷`, as on a Casio:
   `2π`, `3(4+1)`, and `1÷2π = 1÷(2π)`. `−2² = −4`.
