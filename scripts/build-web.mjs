@@ -10,7 +10,11 @@ const dist = new URL("dist/", root);
 const files = [
   "index.html",
   "style.css",
-  "app.js",
+  "app-core.js",
+  "app-calc.js",
+  "app-graph.js",
+  "app-stat.js",
+  "app-main.js",
   "calculator.js",
   "calculus.js",
   "graph.js",
