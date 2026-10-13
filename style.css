@@ -54,12 +54,70 @@ body {
 
 .display {
   display: block;
-  padding: 4px 4px 16px;
+  padding: 4px 4px 0;
   text-align: right;
   font-size: 3rem;
   font-weight: 300;
   color: var(--key-text);
   overflow-wrap: anywhere;
+  cursor: text;
+  /* Taps place the cursor; they should not start selecting text. */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.caret {
+  display: inline-block;
+  width: 2px;
+  height: 0.85em;
+  margin: 0 -1px;
+  vertical-align: -0.05em;
+  background: var(--op);
+  animation: blink 1s steps(1) infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .caret {
+    animation: none;
+  }
+}
+
+.edit-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.backspace {
+  width: 44px;
+  height: 36px;
+  aspect-ratio: auto;
+  border-radius: 999px;
+  background: none;
+  color: var(--key-text);
+}
+
+.backspace:hover {
+  filter: none;
+  background: var(--key);
+}
+
+.backspace svg {
+  width: 26px;
+  height: 26px;
+  display: block;
+  margin: auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .keys {

@@ -4,6 +4,7 @@
 
   const C = window.Calculator;
   const displayEl = document.getElementById("display");
+  const backspaceBtn = document.getElementById("backspace");
   const expressionEl = document.getElementById("expression");
   const modeEl = document.getElementById("mode");
   const sciEl = document.getElementById("sci");
@@ -113,7 +114,19 @@
   }
 
   function render() {
-    displayEl.textContent = state.display;
+    // One span per character, so a tap can tell which digits it fell between.
+    const chars = [...state.display].map((ch, i) => {
+      const span = document.createElement("span");
+      span.textContent = ch;
+      span.dataset.index = i;
+      return span;
+    });
+    if (state.cursor !== null) {
+      const caret = document.createElement("span");
+      caret.className = "caret";
+      chars.splice(state.cursor, 0, caret);
+    }
+    displayEl.replaceChildren(...chars);
     // Shrink long numbers such as π so they stay on one line.
     const length = state.display.length;
     displayEl.style.fontSize =
@@ -163,6 +176,9 @@
       case "backspace":
         state = C.backspace(state);
         break;
+      case "cursor":
+        state = C.moveCursor(state, value);
+        break;
       case "recall":
         state = C.recall(value);
         break;
@@ -182,6 +198,26 @@
   document.querySelector(".keys").addEventListener("click", (event) => {
     const btn = event.target.closest("button");
     if (btn) pressKey(btn);
+  });
+
+  backspaceBtn.addEventListener("click", () => handle("backspace"));
+
+  // Tap between two digits to type or delete there.
+  displayEl.addEventListener("click", (event) => {
+    const span = event.target.closest("[data-index]");
+    let index;
+    if (span) {
+      const box = span.getBoundingClientRect();
+      const rightHalf = event.clientX > box.left + box.width / 2;
+      index = Number(span.dataset.index) + (rightHalf ? 1 : 0);
+    } else {
+      // Empty space: left of the number means its start, otherwise its end.
+      const first = displayEl.querySelector("[data-index]");
+      const left = first && event.clientX < first.getBoundingClientRect().left;
+      index = left ? 0 : state.display.length;
+    }
+    state = C.setCursor(state, index);
+    render();
   });
 
   sciEl.addEventListener("click", (event) => {
@@ -243,6 +279,8 @@
     else if (key === "." || key === ",") handle("decimal");
     else if (key === "Enter" || key === "=") handle("equals");
     else if (key === "Backspace") handle("backspace");
+    else if (key === "ArrowLeft") handle("cursor", -1);
+    else if (key === "ArrowRight") handle("cursor", 1);
     else if (key === "Escape") handle("clear");
     else if (key === "%") handle("percent");
     else if (key === "r") handle("function", "sqrt");
