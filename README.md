@@ -5,7 +5,9 @@ New repository to work with Claude
 
 A simple calculator that runs in the browser with no dependencies or build step.
 
-- **Run it:** open `index.html` in a browser.
+- **Run it:** open `index.html` in a browser. On phones (screens up to 540px wide) it fills
+  the screen like a native calculator, with the keypad at the bottom; wider screens show it
+  as a card.
 - **Typing a calculation:** type the whole expression, as on a Casio, and press `=`:
   `2×(3+4)²−sin(30) = 97.5`. The answer so far appears under the expression while you
   type. Brackets left open at the end are closed for you.
