@@ -15,6 +15,9 @@ A simple calculator that runs in the browser with no dependencies or build step.
   `log`, `1/x`, `n!`, `π`, `e`. **Inv** switches keys to their inverse (`sin⁻¹`, `√x`,
   `ʸ√x`, `eˣ`, `10ˣ`), and **Deg/Rad** sets the angle unit (Degrees by default).
   Functions act on the number on screen: `9` then `√x` gives `3`.
+- **Fixing typos:** **⌫** deletes the last digit. To fix one in the middle, tap between
+  two digits (or use `←` `→`): a cursor appears, and digits and **⌫** work there. A
+  result can be edited the same way.
 - **Keyboard:** digits, `+ - * /`, `.`, `Enter`/`=`, `Backspace`, `Esc` (clear), `%`.
   Scientific: `^` power, `r` square root, `s` `c` `t` sin/cos/tan, `l` log, `n` ln,
   `!` factorial, `p` π. With **Inv** on, the letter keys use the inverse functions.

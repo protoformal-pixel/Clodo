@@ -16,6 +16,7 @@
       ops: [], // operators waiting to be applied, lowest precedence first
       chain: [], // expression typed so far, e.g. ["2", "+", "√9", "*"]
       waitingForOperand: false, // next digit starts a new number
+      cursor: null, // where typing goes in the display; null means the end
       operatorPending: false, // last key was an operator; another one replaces it
       error: false,
       completed: null, // set by equals: { expression, result }
@@ -73,7 +74,27 @@
       label,
       waitingForOperand: true,
       operatorPending: false,
+      cursor: null,
     };
+  }
+
+  // Put text into the number being typed, at the cursor.
+  function insertAt(state, text) {
+    // A lone 0 is a placeholder: typing replaces it wherever the cursor is.
+    if (state.display === "0" && text !== ".") {
+      return { ...state, display: text, cursor: null };
+    }
+    const at = state.cursor === null ? state.display.length : state.cursor;
+    let display = state.display.slice(0, at) + text + state.display.slice(at);
+    let cursor = state.cursor === null ? null : at + text.length;
+    // "0" then "7" is "7", not "07"; also when the 7 goes in front of the 0.
+    const zeros = display.match(/^-?(0+)\d/);
+    if (zeros) {
+      const sign = display.startsWith("-") ? 1 : 0;
+      display = display.slice(0, sign) + display.slice(sign + zeros[1].length);
+      if (cursor !== null) cursor = Math.max(sign, cursor - zeros[1].length);
+    }
+    return { ...state, display, cursor };
   }
 
   function inputDigit(state, digit) {
@@ -86,11 +107,11 @@
         label: null,
         waitingForOperand: false,
         operatorPending: false,
+        cursor: null,
       };
     }
     if (state.display.replace(/[-.]/g, "").length >= 15) return state;
-    const display = state.display === "0" ? digit : state.display + digit;
-    return { ...state, display };
+    return insertAt(state, digit);
   }
 
   function inputDecimal(state) {
@@ -103,10 +124,14 @@
         label: null,
         waitingForOperand: false,
         operatorPending: false,
+        cursor: null,
       };
     }
     if (state.display.includes(".")) return state;
-    return { ...state, display: state.display + "." };
+    // A point typed in front of everything becomes "0.".
+    const atStart =
+      state.cursor === 0 || (state.cursor === 1 && state.display[0] === "-");
+    return insertAt(state, atStart ? "0." : ".");
   }
 
   // Apply every waiting operator that binds at least as tightly as the new
@@ -155,6 +180,7 @@
       chain,
       waitingForOperand: true,
       operatorPending: true,
+      cursor: null,
       completed: null,
     };
   }
@@ -276,12 +302,13 @@
     if (state.error || state.operatorPending || state.display === "0") {
       return state;
     }
-    const display = state.display.startsWith("-")
-      ? state.display.slice(1)
-      : "-" + state.display;
+    const negative = state.display.startsWith("-");
+    const display = negative ? state.display.slice(1) : "-" + state.display;
+    const shift = negative ? -1 : 1;
     return {
       ...state,
       display,
+      cursor: state.cursor === null ? null : Math.max(0, state.cursor + shift),
       value: state.value !== null ? -state.value : null,
       label: state.label !== null ? `-${group(state.label)}` : null,
     };
@@ -292,12 +319,42 @@
     return setResult(state, currentValue(state) / 100, null);
   }
 
+  // Delete the character before the cursor (the last one if no cursor).
   function backspace(state) {
     if (state.error) return createState();
     if (state.waitingForOperand) return state;
-    let display = state.display.slice(0, -1);
-    if (display === "" || display === "-") display = "0";
-    return { ...state, display };
+    const at = state.cursor === null ? state.display.length : state.cursor;
+    if (at === 0) return state;
+    let display = state.display.slice(0, at - 1) + state.display.slice(at);
+    let cursor = state.cursor === null ? null : at - 1;
+    if (display === "" || display === "-" || display === "-0") {
+      display = "0";
+      cursor = null;
+    }
+    return { ...state, display, cursor };
+  }
+
+  // Move the typing position, e.g. after tapping between two digits.
+  // index counts characters from the left; the end of the number is null.
+  // A finished result can be edited too, unless an operator is waiting
+  // for its next number.
+  function setCursor(state, index) {
+    if (state.error || state.operatorPending) return state;
+    if (!/^-?\d+\.?\d*$/.test(state.display)) return state; // e.g. 1e+21
+    const length = state.display.length;
+    const at = Math.min(Math.max(index, 0), length);
+    return {
+      ...state,
+      cursor: at === length ? null : at,
+      waitingForOperand: false,
+      value: null,
+      label: null,
+    };
+  }
+
+  function moveCursor(state, delta) {
+    const at = state.cursor === null ? state.display.length : state.cursor;
+    return setCursor(state, at + delta);
   }
 
   // Start a new calculation from a value, e.g. a result picked from history.
@@ -326,6 +383,8 @@
     toggleSign,
     percent,
     backspace,
+    setCursor,
+    moveCursor,
     recall,
     addToHistory,
     HISTORY_LIMIT,
