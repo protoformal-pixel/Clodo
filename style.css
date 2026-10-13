@@ -88,10 +88,29 @@ body {
   }
 }
 
+.display .placeholder {
+  color: var(--muted);
+}
+
 .edit-row {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 8px;
+}
+
+.preview {
+  min-width: 0;
+  padding-left: 4px;
+  color: var(--muted);
+  font-size: 1.1rem;
+  overflow-wrap: anywhere;
+}
+
+.preview.is-error {
+  color: var(--op);
+  font-weight: 600;
 }
 
 .backspace {

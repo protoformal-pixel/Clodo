@@ -6,21 +6,30 @@ New repository to work with Claude
 A simple calculator that runs in the browser with no dependencies or build step.
 
 - **Run it:** open `index.html` in a browser.
-- **History:** press **History** (or `h`) to show the last 10 calculations under the keys.
-  Click one to reuse its result. History is saved in your browser, so it survives a
-  reload; **Clear** empties it.
-- **Order of operations:** `×` and `÷` come before `+` and `−`, and powers before both,
-  so `2 + 3 × 4 = 14`.
+- **Typing a calculation:** type the whole expression, as on a Casio, and press `=`:
+  `2×(3+4)²−sin(30) = 97.5`. The answer so far appears under the expression while you
+  type. Brackets left open at the end are closed for you.
+- **Order of operations:** brackets first, then powers, then `×` and `÷`, then `+` and
+  `−`. Multiplication without a sign binds tighter than `×` and `÷`, as on a Casio:
+  `2π`, `3(4+1)`, and `1÷2π = 1÷(2π)`. `−2² = −4`.
+- **Ans:** after `=`, pressing an operator carries on from the answer (`Ans×2`); typing a
+  number starts a new calculation. **Ans** can also be typed anywhere.
+- **Errors:** **Syntax Error** (e.g. `2+` or a stray `)`) or **Math Error** (e.g. `5÷0`,
+  `√(−4)`). The expression stays on screen so you can fix it.
 - **Scientific keys:** press **Sci** to show them: `sin` `cos` `tan`, `x²`, `xʸ`, `ln`,
-  `log`, `1/x`, `n!`, `π`, `e`. **Inv** switches keys to their inverse (`sin⁻¹`, `√x`,
-  `ʸ√x`, `eˣ`, `10ˣ`), and **Deg/Rad** sets the angle unit (Degrees by default).
-  Functions act on the number on screen: `9` then `√x` gives `3`.
-- **Fixing typos:** **⌫** deletes the last digit. To fix one in the middle, tap between
-  two digits (or use `←` `→`): a cursor appears, and digits and **⌫** work there. A
-  result can be edited the same way.
-- **Keyboard:** digits, `+ - * /`, `.`, `Enter`/`=`, `Backspace`, `Esc` (clear), `%`.
-  Scientific: `^` power, `r` square root, `s` `c` `t` sin/cos/tan, `l` log, `n` ln,
-  `!` factorial, `p` π. With **Inv** on, the letter keys use the inverse functions.
+  `log`, `x⁻¹`, `n!`, `π`, `e`, `(−)` for a negative number, `%`, `|x|` and **Ans**.
+  Functions go before their number and open a bracket: `sin(30)`. **Inv** switches keys
+  to their inverse (`sin⁻¹`, `√`, `ʸ√x`, `eˣ`, `10ˣ`), and **Deg/Rad** sets the angle
+  unit (Degrees by default).
+- **Fixing typos:** **⌫** deletes the last key (`sin(` goes in one press). Tap between
+  two parts of the expression (or use `←` `→`) to type or delete there. After a result,
+  tap it, or press **⌫** or an arrow, to go back to the expression and change it.
+- **History:** press **History** (or `h`) to show the last 10 calculations under the keys.
+  Tap one to insert its result. History is saved in your browser, so it survives a
+  reload; **Clear** empties it.
+- **Keyboard:** digits, `+ - * / ^ ( ) . ! %`, `Enter`/`=`, `Backspace`, `←` `→`, `Esc`
+  (clear). Scientific: `s` `c` `t` sin/cos/tan, `l` log, `n` ln, `r` √, `p` π, `e`,
+  `a` Ans. With **Inv** on, `s` `c` `t` `l` `n` type the inverse functions.
 - **Install it as an app:** open the GitHub Pages site, then
   - **Android (Chrome):** ⋮ menu → **Add to Home screen** → **Install**.
   - **iPhone (Safari):** Share button → **Add to Home Screen**.
@@ -32,7 +41,8 @@ A simple calculator that runs in the browser with no dependencies or build step.
 
 Files:
 
-- `calculator.js`: the calculator logic, with no page code, so it can be tested.
+- `calculator.js`: the calculator logic (expression parser and evaluator), with no page
+  code, so it can be tested.
 - `app.js`: connects the logic to the buttons and keyboard.
 - `index.html`, `style.css`: the page layout and styles.
 - `calculator.test.js`: unit tests.

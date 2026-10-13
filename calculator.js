@@ -1,229 +1,15 @@
 // Calculator logic, kept free of DOM code so it can be tested with Node.
+//
+// What you type is kept as a list of tokens, e.g.
+//   ["2", "*", "(", "3", "+", "4", ")", "²"]
+// and "=" parses and evaluates the whole list, like a Casio in natural
+// input mode. Keeping tokens rather than text means ⌫ removes "sin(" in one
+// go, and the parse tree can later be reused for graphs and integrals.
 (function (root) {
   "use strict";
 
-  // Higher binds tighter, so 2 + 3 × 4 = 14. Powers and roots group right
-  // to left, so 2 ^ 3 ^ 2 = 2 ^ 9.
-  const PRECEDENCE = { "+": 1, "-": 1, "*": 2, "/": 2, "^": 3, root: 3 };
-  const RIGHT_ASSOCIATIVE = { "^": true, root: true };
-
-  function createState() {
-    return {
-      display: "0",
-      value: null, // exact number behind the display, when it was calculated
-      label: null, // how the current number reads in the expression, e.g. "√9"
-      values: [], // numbers waiting for their operator to be applied
-      ops: [], // operators waiting to be applied, lowest precedence first
-      chain: [], // expression typed so far, e.g. ["2", "+", "√9", "*"]
-      waitingForOperand: false, // next digit starts a new number
-      cursor: null, // where typing goes in the display; null means the end
-      operatorPending: false, // last key was an operator; another one replaces it
-      error: false,
-      completed: null, // set by equals: { expression, result }
-    };
-  }
-
-  function nthRoot(x, n) {
-    if (n === 0) return NaN;
-    if (x >= 0) return Math.pow(x, 1 / n);
-    // Odd roots of negative numbers are real: the cube root of -8 is -2.
-    return Number.isInteger(n) && n % 2 !== 0 ? -Math.pow(-x, 1 / n) : NaN;
-  }
-
-  function compute(a, b, operator) {
-    switch (operator) {
-      case "+":
-        return a + b;
-      case "-":
-        return a - b;
-      case "*":
-        return a * b;
-      case "/":
-        return b === 0 ? NaN : a / b;
-      case "^":
-        return Math.pow(a, b);
-      case "root":
-        return nthRoot(a, b);
-      default:
-        return b;
-    }
-  }
-
-  function format(value) {
-    if (!Number.isFinite(value)) return "Error";
-    // Round away floating point noise such as 0.1 + 0.2.
-    const rounded = parseFloat(value.toPrecision(12));
-    return String(rounded);
-  }
-
-  function currentValue(state) {
-    return state.value !== null ? state.value : parseFloat(state.display);
-  }
-
-  function currentLabel(state) {
-    return state.label !== null ? state.label : String(parseFloat(state.display));
-  }
-
-  // Show a calculated number; the next digit typed starts a new number.
-  function setResult(state, value, label) {
-    if (!Number.isFinite(value)) return errorState();
-    return {
-      ...state,
-      display: format(value),
-      value,
-      label,
-      waitingForOperand: true,
-      operatorPending: false,
-      cursor: null,
-    };
-  }
-
-  // Put text into the number being typed, at the cursor.
-  function insertAt(state, text) {
-    // A lone 0 is a placeholder: typing replaces it wherever the cursor is.
-    if (state.display === "0" && text !== ".") {
-      return { ...state, display: text, cursor: null };
-    }
-    const at = state.cursor === null ? state.display.length : state.cursor;
-    let display = state.display.slice(0, at) + text + state.display.slice(at);
-    let cursor = state.cursor === null ? null : at + text.length;
-    // "0" then "7" is "7", not "07"; also when the 7 goes in front of the 0.
-    const zeros = display.match(/^-?(0+)\d/);
-    if (zeros) {
-      const sign = display.startsWith("-") ? 1 : 0;
-      display = display.slice(0, sign) + display.slice(sign + zeros[1].length);
-      if (cursor !== null) cursor = Math.max(sign, cursor - zeros[1].length);
-    }
-    return { ...state, display, cursor };
-  }
-
-  function inputDigit(state, digit) {
-    if (state.error) state = createState();
-    if (state.waitingForOperand) {
-      return {
-        ...state,
-        display: digit,
-        value: null,
-        label: null,
-        waitingForOperand: false,
-        operatorPending: false,
-        cursor: null,
-      };
-    }
-    if (state.display.replace(/[-.]/g, "").length >= 15) return state;
-    return insertAt(state, digit);
-  }
-
-  function inputDecimal(state) {
-    if (state.error) state = createState();
-    if (state.waitingForOperand) {
-      return {
-        ...state,
-        display: "0.",
-        value: null,
-        label: null,
-        waitingForOperand: false,
-        operatorPending: false,
-        cursor: null,
-      };
-    }
-    if (state.display.includes(".")) return state;
-    // A point typed in front of everything becomes "0.".
-    const atStart =
-      state.cursor === 0 || (state.cursor === 1 && state.display[0] === "-");
-    return insertAt(state, atStart ? "0." : ".");
-  }
-
-  // Apply every waiting operator that binds at least as tightly as the new
-  // one, then queue the new one.
-  function pushOperator(values, ops, operator) {
-    values = [...values];
-    ops = [...ops];
-    while (ops.length) {
-      const top = ops[ops.length - 1];
-      const tighter = PRECEDENCE[top] > PRECEDENCE[operator];
-      const same = PRECEDENCE[top] === PRECEDENCE[operator];
-      if (!tighter && !(same && !RIGHT_ASSOCIATIVE[operator])) break;
-      const b = values.pop();
-      const a = values.pop();
-      values.push(compute(a, b, ops.pop()));
-    }
-    ops.push(operator);
-    return { values, ops };
-  }
-
-  function setOperator(state, operator) {
-    if (state.error) return state;
-
-    // Pressing another operator straight away replaces the last one.
-    const replacing = state.operatorPending;
-    const { values, ops } = replacing
-      ? pushOperator(state.values, state.ops.slice(0, -1), operator)
-      : pushOperator(
-          [...state.values, currentValue(state)],
-          state.ops,
-          operator
-        );
-    const chain = replacing
-      ? [...state.chain.slice(0, -1), operator]
-      : [...state.chain, currentLabel(state), operator];
-
-    const top = values[values.length - 1];
-    if (!Number.isFinite(top)) return errorState();
-    return {
-      ...state,
-      display: format(top),
-      value: top,
-      label: null,
-      values,
-      ops,
-      chain,
-      waitingForOperand: true,
-      operatorPending: true,
-      cursor: null,
-      completed: null,
-    };
-  }
-
-  function equals(state) {
-    if (state.error) return state;
-
-    if (!state.ops.length) {
-      // A lone function such as √9 is still worth recording, once.
-      if (state.label === null) return { ...state, completed: null };
-      return {
-        ...state,
-        label: null,
-        completed: { expression: state.label, result: state.display },
-      };
-    }
-
-    const values = [...state.values, currentValue(state)];
-    const ops = [...state.ops];
-    while (ops.length) {
-      const b = values.pop();
-      const a = values.pop();
-      values.push(compute(a, b, ops.pop()));
-    }
-    const result = values[0];
-    if (!Number.isFinite(result)) return errorState();
-    const display = format(result);
-    return {
-      ...createState(),
-      display,
-      value: result,
-      waitingForOperand: true,
-      completed: {
-        expression: [...state.chain, currentLabel(state)].join(" "),
-        result: display,
-      },
-    };
-  }
-
-  // Brackets around a label unless it is already a single plain value.
-  function group(label) {
-    return /^([\d.]+(e[+-]\d+)?|π|e)$/.test(label) ? label : `(${label})`;
-  }
+  // ---------------------------------------------------------------------
+  // Maths helpers
 
   const DEGREES = Math.PI / 180;
 
@@ -257,109 +43,384 @@
     return result;
   }
 
-  const degreeSign = (angle) => (angle === "deg" ? "°" : "");
+  function nthRoot(x, n) {
+    if (n === 0) return NaN;
+    if (x >= 0) return Math.pow(x, 1 / n);
+    // Odd roots of negative numbers are real: the cube root of -8 is -2.
+    return Number.isInteger(n) && n % 2 !== 0 ? -Math.pow(-x, 1 / n) : NaN;
+  }
 
-  // Each function: how to calculate it and how it reads in the history.
+  function format(value) {
+    // Round away floating point noise such as 0.1 + 0.2.
+    const rounded = parseFloat(value.toPrecision(12));
+    return String(Object.is(rounded, -0) ? 0 : rounded);
+  }
+
+  // ---------------------------------------------------------------------
+  // Tokens
+
+  // Functions open a bracket as part of the token, as on a Casio: "sin(".
   const FUNCTIONS = {
-    square: { calc: (x) => x * x, label: (l) => `${group(l)}²` },
-    sqrt: { calc: Math.sqrt, label: (l) => `√${group(l)}` },
-    reciprocal: { calc: (x) => 1 / x, label: (l) => `1/${group(l)}` },
-    factorial: { calc: factorial, label: (l) => `${group(l)}!` },
-    ln: { calc: Math.log, label: (l) => `ln(${l})` },
-    exp: { calc: Math.exp, label: (l) => `e^${group(l)}` },
-    log: { calc: Math.log10, label: (l) => `log(${l})` },
-    pow10: { calc: (x) => Math.pow(10, x), label: (l) => `10^${group(l)}` },
+    "sin(": (x, angle) => trig("sin", x, angle),
+    "cos(": (x, angle) => trig("cos", x, angle),
+    "tan(": (x, angle) => trig("tan", x, angle),
+    "sin⁻¹(": (x, angle) => inverseTrig("asin", x, angle),
+    "cos⁻¹(": (x, angle) => inverseTrig("acos", x, angle),
+    "tan⁻¹(": (x, angle) => inverseTrig("atan", x, angle),
+    "ln(": Math.log,
+    "log(": Math.log10,
+    "√(": Math.sqrt,
+    "e^(": Math.exp,
+    "10^(": (x) => Math.pow(10, x),
+    "Abs(": Math.abs,
   };
-  for (const name of ["sin", "cos", "tan"]) {
-    FUNCTIONS[name] = {
-      calc: (x, angle) => trig(name, x, angle),
-      label: (l, angle) => `${name}(${l}${degreeSign(angle)})`,
-    };
-    FUNCTIONS["a" + name] = {
-      calc: (x, angle) => inverseTrig("a" + name, x, angle),
-      label: (l) => `${name}⁻¹(${l})`,
-    };
+
+  // Written after the number they act on: 3², 5!, 4⁻¹, 50%.
+  const POSTFIX = {
+    "²": (x) => x * x,
+    "⁻¹": (x) => 1 / x,
+    "!": factorial,
+    "%": (x) => x / 100,
+  };
+
+  const CONSTANTS = { π: Math.PI, e: Math.E };
+
+  // "root": a ʸ√ b is the b-th root of a, so 27 ʸ√ 3 = 3.
+  const BINARY = {
+    "+": (a, b) => a + b,
+    "-": (a, b) => a - b,
+    "*": (a, b) => a * b,
+    "/": (a, b) => a / b,
+    "^": Math.pow,
+    root: nthRoot,
+  };
+
+  // How tokens are shown. "neg" is the (−) key: always a minus sign in front
+  // of a number, never "subtract".
+  const SHOWN = { "*": "×", "/": "÷", "-": "−", neg: "−", root: "ʸ√" };
+
+  function tokenText(token) {
+    return SHOWN[token] ?? token;
   }
 
-  // Apply a function such as "sqrt" or "sin" to the number on screen.
-  // angle is "deg" or "rad" and only matters for the trig functions.
-  function applyFunction(state, name, angle = "deg") {
-    if (state.error) return state;
-    const fn = FUNCTIONS[name];
-    const value = fn.calc(currentValue(state), angle);
-    return setResult(state, value, fn.label(currentLabel(state), angle));
+  // Pressed right after a result, these carry on from it: "+" gives "Ans+".
+  const CONTINUES = new Set([
+    "+", "-", "*", "/", "^", "root", ...Object.keys(POSTFIX),
+  ]);
+
+  const isDigit = (t) => /^[0-9.]$/.test(t);
+
+  // ---------------------------------------------------------------------
+  // Parsing: tokens -> tree
+  //
+  //   sum      = product (("+" | "-") product)*
+  //   product  = implicit (("×" | "÷") implicit)*
+  //   implicit = unary power*        2π, 3(4+1): binds tighter than × and ÷,
+  //                                  as on a Casio, so 1÷2π = 1÷(2π)
+  //   unary    = ("-" | "neg" | "+") unary | power
+  //   power    = postfix (("^" | "ʸ√") unary)?        right to left: 2^3^2
+  //   postfix  = primary ("²" | "!" | "⁻¹" | "%")*
+  //   primary  = number | π | e | Ans | x | "(" sum ")" | function sum ")"
+  //
+  // Missing closing brackets at the very end are added, as on a Casio.
+
+  function syntaxError() {
+    return { calcError: "Syntax Error" };
   }
 
-  const CONSTANTS = { pi: [Math.PI, "π"], e: [Math.E, "e"] };
-
-  function insertConstant(state, name) {
-    if (state.error) state = createState();
-    const [value, label] = CONSTANTS[name];
-    return setResult(state, value, label);
+  function mathError() {
+    return { calcError: "Math Error" };
   }
 
-  function toggleSign(state) {
-    if (state.error || state.operatorPending || state.display === "0") {
-      return state;
+  // Join digit tokens into numbers: "1" "." "5" -> 1.5.
+  function lex(tokens) {
+    const items = [];
+    for (let i = 0; i < tokens.length; i++) {
+      if (!isDigit(tokens[i])) {
+        items.push(tokens[i]);
+        continue;
+      }
+      let text = "";
+      while (i < tokens.length && isDigit(tokens[i])) text += tokens[i++];
+      i--;
+      if (!/^(\d+\.?\d*|\.\d+)$/.test(text)) throw syntaxError();
+      items.push({ number: parseFloat(text) });
     }
-    const negative = state.display.startsWith("-");
-    const display = negative ? state.display.slice(1) : "-" + state.display;
-    const shift = negative ? -1 : 1;
+    return items;
+  }
+
+  function parse(tokens) {
+    const items = lex(tokens);
+    let pos = 0;
+    const peek = () => items[pos];
+    const atEnd = () => pos >= items.length;
+
+    const startsFactor = (item) =>
+      item !== undefined &&
+      (typeof item === "object" ||
+        item in CONSTANTS ||
+        item in FUNCTIONS ||
+        item === "Ans" ||
+        item === "x" ||
+        item === "(");
+
+    function closeBracket() {
+      if (peek() === ")") pos++;
+      else if (!atEnd()) throw syntaxError();
+    }
+
+    function primary() {
+      const item = peek();
+      if (item === undefined) throw syntaxError();
+      pos++;
+      if (typeof item === "object") return { type: "num", value: item.number };
+      if (item in CONSTANTS) return { type: "num", value: CONSTANTS[item] };
+      if (item === "Ans") return { type: "ans" };
+      if (item === "x") return { type: "x" };
+      if (item === "(") {
+        const inner = sum();
+        closeBracket();
+        return inner;
+      }
+      if (item in FUNCTIONS) {
+        const arg = sum();
+        closeBracket();
+        return { type: "fn", name: item, arg };
+      }
+      throw syntaxError();
+    }
+
+    function postfix() {
+      let node = primary();
+      while (peek() in POSTFIX) node = { type: "post", op: items[pos++], arg: node };
+      return node;
+    }
+
+    function power() {
+      const base = postfix();
+      if (peek() === "^" || peek() === "root") {
+        const op = items[pos++];
+        return { type: "bin", op, left: base, right: unary() };
+      }
+      return base;
+    }
+
+    function unary() {
+      const item = peek();
+      if (item === "-" || item === "neg") {
+        pos++;
+        return { type: "neg", arg: unary() };
+      }
+      if (item === "+") {
+        pos++;
+        return unary();
+      }
+      return power();
+    }
+
+    function implicit() {
+      let node = unary();
+      while (startsFactor(peek())) {
+        node = { type: "bin", op: "*", left: node, right: power() };
+      }
+      return node;
+    }
+
+    function product() {
+      let node = implicit();
+      while (peek() === "*" || peek() === "/") {
+        const op = items[pos++];
+        node = { type: "bin", op, left: node, right: implicit() };
+      }
+      return node;
+    }
+
+    function sum() {
+      let node = product();
+      while (peek() === "+" || peek() === "-") {
+        const op = items[pos++];
+        node = { type: "bin", op, left: node, right: product() };
+      }
+      return node;
+    }
+
+    if (atEnd()) throw syntaxError();
+    const tree = sum();
+    if (!atEnd()) throw syntaxError(); // e.g. a stray ")"
+    return tree;
+  }
+
+  // ---------------------------------------------------------------------
+  // Evaluating: tree -> number
+  //
+  // env: { angle: "deg" | "rad", ans: number, x: number }
+
+  function evaluate(node, env) {
+    let value;
+    switch (node.type) {
+      case "num":
+        return node.value;
+      case "ans":
+        return env.ans;
+      case "x":
+        return env.x;
+      case "neg":
+        return -evaluate(node.arg, env);
+      case "post":
+        value = POSTFIX[node.op](evaluate(node.arg, env));
+        break;
+      case "fn":
+        value = FUNCTIONS[node.name](evaluate(node.arg, env), env.angle);
+        break;
+      case "bin":
+        value = BINARY[node.op](evaluate(node.left, env), evaluate(node.right, env));
+        break;
+    }
+    // Division by zero, √(−1), log(0), tan(90°)… stop here.
+    if (!Number.isFinite(value)) throw mathError();
+    return value;
+  }
+
+  function calculate(tokens, env) {
+    return evaluate(parse(tokens), env);
+  }
+
+  // ---------------------------------------------------------------------
+  // Calculator state
+  //
+  // tokens: what has been typed. cursor: where the next token goes (an
+  // index into tokens), or null for the end. result: the answer shown after
+  // "=", or null while typing. error: "Syntax Error" / "Math Error" after a
+  // failed "=", cleared by the next edit. ans: the last answer.
+
+  function createState(ans = 0) {
     return {
-      ...state,
-      display,
-      cursor: state.cursor === null ? null : Math.max(0, state.cursor + shift),
-      value: state.value !== null ? -state.value : null,
-      label: state.label !== null ? `-${group(state.label)}` : null,
+      tokens: [],
+      cursor: null,
+      result: null,
+      resultExpression: null,
+      error: null,
+      ans,
+      completed: null, // set by equals: { expression, result } for history
     };
   }
 
-  function percent(state) {
-    if (state.error || state.operatorPending) return state;
-    return setResult(state, currentValue(state) / 100, null);
+  // Readable text for tokens; Ans is written out as its value.
+  function toText(tokens, ans) {
+    return tokens
+      .map((t) => {
+        if (t !== "Ans" || ans === undefined) return tokenText(t);
+        const text = format(ans).replace("-", "−");
+        return ans < 0 ? `(${text})` : text;
+      })
+      .join("");
   }
 
-  // Delete the character before the cursor (the last one if no cursor).
-  function backspace(state) {
-    if (state.error) return createState();
-    if (state.waitingForOperand) return state;
-    const at = state.cursor === null ? state.display.length : state.cursor;
-    if (at === 0) return state;
-    let display = state.display.slice(0, at - 1) + state.display.slice(at);
-    let cursor = state.cursor === null ? null : at - 1;
-    if (display === "" || display === "-" || display === "-0") {
-      display = "0";
+  // Back to editing the expression after a result or an error.
+  function editing(state) {
+    return { ...state, result: null, error: null, completed: null };
+  }
+
+  function insert(state, token) {
+    let { tokens, cursor } = state;
+    if (state.result !== null) {
+      // After a result, operators carry on from it and anything else starts
+      // a new calculation.
+      tokens = CONTINUES.has(token) ? ["Ans"] : [];
       cursor = null;
     }
-    return { ...state, display, cursor };
-  }
-
-  // Move the typing position, e.g. after tapping between two digits.
-  // index counts characters from the left; the end of the number is null.
-  // A finished result can be edited too, unless an operator is waiting
-  // for its next number.
-  function setCursor(state, index) {
-    if (state.error || state.operatorPending) return state;
-    if (!/^-?\d+\.?\d*$/.test(state.display)) return state; // e.g. 1e+21
-    const length = state.display.length;
-    const at = Math.min(Math.max(index, 0), length);
+    const at = cursor === null ? tokens.length : cursor;
     return {
-      ...state,
-      cursor: at === length ? null : at,
-      waitingForOperand: false,
-      value: null,
-      label: null,
+      ...editing(state),
+      tokens: [...tokens.slice(0, at), token, ...tokens.slice(at)],
+      cursor: cursor === null ? null : at + 1,
     };
   }
 
+  // Insert a number given as text, e.g. a result picked from history.
+  function insertNumber(state, text) {
+    if (state.result !== null) state = { ...editing(state), tokens: [], cursor: null };
+    let [mantissa, exponent] = text.split("e");
+    const tokens = [];
+    if (mantissa.startsWith("-")) {
+      tokens.push("neg");
+      mantissa = mantissa.slice(1);
+    }
+    tokens.push(...mantissa);
+    if (exponent) {
+      // 1.2e+21 becomes (1.2×10^(21)) so it stays one number.
+      tokens.unshift("(");
+      tokens.push("*", "10^(");
+      if (exponent.startsWith("-")) tokens.push("neg");
+      tokens.push(...exponent.replace(/^[-+]/, ""), ")", ")");
+    }
+    return tokens.reduce(insert, state);
+  }
+
+  // Delete the token before the cursor. After a result, ⌫ first goes back
+  // to the expression so it can be fixed.
+  function backspace(state) {
+    if (state.result !== null) return editing(state);
+    const at = state.cursor === null ? state.tokens.length : state.cursor;
+    if (at === 0) return editing(state);
+    return {
+      ...editing(state),
+      tokens: [...state.tokens.slice(0, at - 1), ...state.tokens.slice(at)],
+      cursor: state.cursor === null ? null : at - 1,
+    };
+  }
+
+  function clear(state) {
+    return createState(state.ans);
+  }
+
+  // Put the cursor before token number index (the end is null).
+  function setCursor(state, index) {
+    const length = state.tokens.length;
+    const at = Math.min(Math.max(index, 0), length);
+    return { ...editing(state), cursor: at === length ? null : at };
+  }
+
+  // ← and →. After a result they go back to the expression, cursor at the end.
   function moveCursor(state, delta) {
-    const at = state.cursor === null ? state.display.length : state.cursor;
+    if (state.result !== null) return { ...editing(state), cursor: null };
+    const at = state.cursor === null ? state.tokens.length : state.cursor;
     return setCursor(state, at + delta);
   }
 
-  // Start a new calculation from a value, e.g. a result picked from history.
-  function recall(value) {
-    return { ...createState(), display: value, waitingForOperand: true };
+  function equals(state, angle = "deg") {
+    if (state.result !== null || state.tokens.length === 0) {
+      return { ...state, completed: null };
+    }
+    try {
+      const value = calculate(state.tokens, { angle, ans: state.ans });
+      const result = format(value);
+      const expression = toText(state.tokens, state.ans);
+      return {
+        ...state,
+        cursor: null,
+        result,
+        resultExpression: expression,
+        error: null,
+        ans: value,
+        completed: { expression, result },
+      };
+    } catch (e) {
+      if (!e.calcError) throw e;
+      return { ...state, error: e.calcError, completed: null };
+    }
+  }
+
+  // The answer so far while typing, or null if it is not ready or would
+  // only repeat what is on screen.
+  function preview(state, angle = "deg") {
+    if (state.result !== null || state.error || !state.tokens.length) return null;
+    if (state.tokens.every(isDigit)) return null;
+    try {
+      return format(calculate(state.tokens, { angle, ans: state.ans }));
+    } catch {
+      return null;
+    }
   }
 
   // Newest first, capped at HISTORY_LIMIT entries.
@@ -368,27 +429,24 @@
     return [entry, ...history].slice(0, HISTORY_LIMIT);
   }
 
-  function errorState() {
-    return { ...createState(), display: "Error", error: true };
-  }
-
   const Calculator = {
     createState,
-    inputDigit,
-    inputDecimal,
-    setOperator,
-    equals,
-    applyFunction,
-    insertConstant,
-    toggleSign,
-    percent,
+    insert,
+    insertNumber,
     backspace,
+    clear,
     setCursor,
     moveCursor,
-    recall,
+    equals,
+    preview,
+    tokenText,
+    toText,
+    parse,
+    evaluate,
+    calculate,
+    format,
     addToHistory,
     HISTORY_LIMIT,
-    clear: createState,
   };
 
   if (typeof module !== "undefined" && module.exports) {
