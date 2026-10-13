@@ -9,6 +9,8 @@
       operator: null, // pending operator: + - * /
       waitingForOperand: false, // next digit starts a new number
       error: false,
+      chain: [], // numbers and operators typed so far, e.g. ["2", "+", "3", "*"]
+      completed: null, // set by equals: { expression, result }
     };
   }
 
@@ -59,11 +61,21 @@
 
     // Changing operator before typing the next number just swaps it.
     if (state.operator && state.waitingForOperand) {
-      return { ...state, operator };
+      const chain = [...state.chain.slice(0, -1), operator];
+      return { ...state, operator, chain };
     }
 
+    const chain = [...state.chain, String(current), operator];
+
     if (state.stored === null || state.operator === null) {
-      return { ...state, stored: current, operator, waitingForOperand: true };
+      return {
+        ...state,
+        stored: current,
+        operator,
+        waitingForOperand: true,
+        chain,
+        completed: null,
+      };
     }
 
     const result = compute(state.stored, current, state.operator);
@@ -75,6 +87,7 @@
       stored: result,
       operator,
       waitingForOperand: true,
+      chain,
     };
   }
 
@@ -82,19 +95,18 @@
     if (state.error || state.operator === null || state.stored === null) {
       return state;
     }
-    const result = compute(
-      state.stored,
-      parseFloat(state.display),
-      state.operator
-    );
+    const current = parseFloat(state.display);
+    const result = compute(state.stored, current, state.operator);
     const display = format(result);
     if (display === "Error") return errorState();
     return {
+      ...createState(),
       display,
-      stored: null,
-      operator: null,
       waitingForOperand: true,
-      error: false,
+      completed: {
+        expression: [...state.chain, String(current)].join(" "),
+        result: display,
+      },
     };
   }
 
@@ -119,6 +131,17 @@
     return { ...state, display };
   }
 
+  // Start a new calculation from a value, e.g. a result picked from history.
+  function recall(value) {
+    return { ...createState(), display: value, waitingForOperand: true };
+  }
+
+  // Newest first, capped at HISTORY_LIMIT entries.
+  const HISTORY_LIMIT = 10;
+  function addToHistory(history, entry) {
+    return [entry, ...history].slice(0, HISTORY_LIMIT);
+  }
+
   function errorState() {
     return { ...createState(), display: "Error", error: true };
   }
@@ -132,6 +155,9 @@
     toggleSign,
     percent,
     backspace,
+    recall,
+    addToHistory,
+    HISTORY_LIMIT,
     clear: createState,
   };
 

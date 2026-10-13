@@ -6,6 +6,8 @@ New repository to work with Claude
 A simple calculator that runs in the browser with no dependencies or build step.
 
 - **Run it:** open `index.html` in a browser.
+- **History:** the last 10 calculations appear under the keys. Click one to reuse its
+  result. History is saved in your browser, so it survives a reload; **Clear** empties it.
 - **Keyboard:** digits, `+ - * /`, `.`, `Enter`/`=`, `Backspace`, `Esc` (clear), `%`.
 - **Test it:** `node --test` (needs Node 18 or newer).
 
