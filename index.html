@@ -8,8 +8,48 @@
   </head>
   <body>
     <main class="calculator" aria-label="Calculator">
+      <div class="top-bar">
+        <button id="sci-toggle" class="chip" aria-pressed="false">Sci</button>
+        <span id="mode" class="mode"></span>
+      </div>
       <div class="expression" id="expression" aria-hidden="true"></div>
       <output class="display" id="display" aria-live="polite">0</output>
+      <div class="sci" id="sci" hidden>
+        <div class="angle" role="group" aria-label="Angle unit">
+          <button data-angle="deg" aria-pressed="true">Deg</button>
+          <button data-angle="rad" aria-pressed="false">Rad</button>
+        </div>
+        <div class="sci-keys">
+          <button id="inv" aria-pressed="false" title="Inverse functions">
+            Inv
+          </button>
+          <button data-fn="sin" data-inv-fn="asin" data-inv-label="sin⁻¹">
+            sin
+          </button>
+          <button data-fn="cos" data-inv-fn="acos" data-inv-label="cos⁻¹">
+            cos
+          </button>
+          <button data-fn="tan" data-inv-fn="atan" data-inv-label="tan⁻¹">
+            tan
+          </button>
+
+          <button data-fn="square" data-inv-fn="sqrt" data-inv-label="√x">
+            x²
+          </button>
+          <button data-operator="^" data-inv-operator="root" data-inv-label="ʸ√x">
+            xʸ
+          </button>
+          <button data-fn="ln" data-inv-fn="exp" data-inv-label="eˣ">ln</button>
+          <button data-fn="log" data-inv-fn="pow10" data-inv-label="10ˣ">
+            log
+          </button>
+
+          <button data-fn="reciprocal">1/x</button>
+          <button data-fn="factorial">n!</button>
+          <button data-constant="pi">π</button>
+          <button data-constant="e">e</button>
+        </div>
+      </div>
       <div class="keys">
         <button data-action="clear" class="fn">AC</button>
         <button data-action="sign" class="fn">±</button>
