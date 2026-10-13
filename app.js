@@ -4,6 +4,7 @@
 
   const C = window.Calculator;
   const G = window.Graph;
+  const K = window.Calculus;
   const displayEl = document.getElementById("display");
   const backspaceBtn = document.getElementById("backspace");
   const expressionEl = document.getElementById("expression");
@@ -32,6 +33,8 @@
   const tableEl = document.getElementById("value-table");
   const tableToggle = document.getElementById("table-toggle");
   const graphAngleBtn = document.getElementById("graph-angle");
+  const gsolvEl = document.getElementById("gsolv");
+  const solveResultEl = document.getElementById("solve-result");
   const symbols = { "+": "+", "-": "−", "*": "×", "/": "÷", "^": "^", root: "ʸ√" };
   const HISTORY_KEY = "calculator-history";
   const SETTINGS_KEY = "calculator-settings";
@@ -47,6 +50,9 @@
   let graph = loadGraph(); // { editors, hidden, view, table }
   let editing = null; // index of the function being typed, or null
   let traceX = null; // x of the trace line, or null
+  // G-Solv in progress: { kind, target, index } for root/min/max/isect, or
+  // { kind: "integral", target, a, b, value } for ∫dx. null when idle.
+  let solving = null;
 
   // History and settings are kept in this browser only. Storage can be
   // unavailable (e.g. private browsing), so every access is guarded.
@@ -409,12 +415,18 @@
     const css = getComputedStyle(document.documentElement);
     const color = (name) => css.getPropertyValue(name).trim();
     const shown = curves().map((c) => ({ f: c.f, color: color(`--series-${c.i + 1}`), i: c.i }));
+    const target = solving && shown.find((c) => c.i === solving.target);
+    const shade =
+      target && solving.kind === "integral" && solving.b !== null
+        ? { f: target.f, a: solving.a, b: solving.b, color: target.color }
+        : null;
     G.draw(ctx, width, height, graph.view, shown, {
       surface: color("--panel"),
       grid: color("--graph-grid"),
       axis: color("--graph-axis"),
       label: color("--muted"),
-    }, traceX);
+    }, traceX, shade);
+    renderSolve(shown);
     renderTrace(shown);
     renderTable(shown);
   }
@@ -428,13 +440,14 @@
       );
       return;
     }
-    const parts = [span(`x = `), span(G.label(traceX), "val")];
+    const { xs, ys } = viewSpans();
+    const parts = [span(`x = `), span(tidy(traceX, xs), "val")];
     for (const c of shown) {
       const y = c.f(traceX);
       const item = span("", "trace-item");
       const dot = span("", "dot");
       dot.style.setProperty("--fn-color", seriesColor(c.i));
-      item.append(dot, span(`y${c.i + 1} = `), span(Number.isFinite(y) ? G.label(y) : "—", "val"));
+      item.append(dot, span(`y${c.i + 1} = `), span(Number.isFinite(y) ? tidy(y, ys) : "—", "val"));
       parts.push(item);
     }
     traceEl.replaceChildren(...parts);
@@ -460,7 +473,7 @@
       const tr = document.createElement("tr");
       const cells = [G.label(x, xs.step), ...shown.map((c) => {
         const y = c.f(x);
-        return Number.isFinite(y) ? G.label(y) : "—";
+        return Number.isFinite(y) ? tidy(y, b.ymax - b.ymin) : "—";
       })];
       for (const text of cells) {
         tr.append(Object.assign(document.createElement("td"), { textContent: text }));
@@ -484,6 +497,7 @@
 
   function stopEditing() {
     editing = null;
+    solving = null; // the functions may have changed
     saveGraph();
     renderModes();
     renderGraph();
@@ -598,7 +612,8 @@
     if (!moved && pointers.size === 1) {
       const { width, height } = size();
       const b = G.bounds(graph.view, width, height);
-      traceX = b.xmin + canvasPoint(event).x * graph.view.sx;
+      traceX = snap(b.xmin + canvasPoint(event).x * graph.view.sx);
+      if (solving?.kind === "integral" && solving.b === null) setLimit(traceX);
       scheduleDraw();
     }
     pointers.delete(event.pointerId);
@@ -655,6 +670,176 @@
 
   new ResizeObserver(scheduleDraw).observe(canvas);
 
+  // ---------------------------------------------------------------------
+  // G-Solv: roots, minimums, maximums, intersections and ∫dx on the graph.
+
+  // Taps land on round numbers about every 10 pixels, so x = 1 is easy to hit.
+  function snap(x) {
+    const step = G.niceStep(graph.view.sx * size().width, size().width / 10);
+    return Number((Math.round(x / step) * step).toPrecision(12));
+  }
+
+  // Text for a value, with floating point noise far below what the view can
+  // show (like 4e-16 at a root) written as 0. span: the view's width or height.
+  function tidy(value, span) {
+    return G.label(Math.abs(value) < span * 1e-7 ? 0 : value);
+  }
+
+  function viewSpans() {
+    const { width, height } = size();
+    return { xs: graph.view.sx * width, ys: graph.view.sy * height };
+  }
+
+  function nextShown(shown, i) {
+    const at = shown.findIndex((c) => c.i === i);
+    return shown[(at + 1) % shown.length];
+  }
+
+  // The x values the current G-Solv finds in view, left to right.
+  function solveResults(shown) {
+    const { width, height } = size();
+    const { xmin, xmax } = G.bounds(graph.view, width, height);
+    const target = shown.find((c) => c.i === solving.target);
+    if (solving.kind === "root") return K.roots(target.f, xmin, xmax);
+    if (solving.kind === "min" || solving.kind === "max") {
+      return K.extrema(target.f, xmin, xmax, solving.kind).map((p) => p.x);
+    }
+    const other = nextShown(shown, solving.target);
+    return K.roots((x) => target.f(x) - other.f(x), xmin, xmax);
+  }
+
+  function startSolve(kind) {
+    const shown = curves();
+    if (!shown.length) {
+      solving = { kind, target: null, message: "Enter a function first" };
+      return renderGraph();
+    }
+    const keepTarget = solving && shown.some((c) => c.i === solving.target);
+    const target = keepTarget ? solving.target : shown[0].i;
+    if (kind === "integral") {
+      solving = { kind, target, a: null, b: null };
+    } else if (solving?.kind === kind && solving.target === target && solving.found > 1) {
+      solving = { ...solving, index: solving.index + 1 }; // pressed again: the next one
+    } else {
+      solving = { kind, target, index: 0 };
+    }
+    runSolve(shown);
+  }
+
+  function runSolve(shown) {
+    if (solving.kind === "integral") {
+      if (solving.b !== null) {
+        const target = shown.find((c) => c.i === solving.target);
+        solving.value = K.integrate(target.f, solving.a, solving.b);
+      }
+      return renderGraph();
+    }
+    if (solving.kind === "isect" && shown.length < 2) {
+      solving.message = "Isect needs two functions on the graph";
+      return renderGraph();
+    }
+    const xs = solveResults(shown);
+    solving.found = xs.length;
+    solving.message = xs.length ? null : "None in view: move or zoom out";
+    if (xs.length) {
+      solving.index %= xs.length;
+      traceX = xs[solving.index];
+    }
+    renderGraph();
+  }
+
+  function setLimit(x) {
+    if (solving.a === null) solving.a = x;
+    else {
+      solving.b = x;
+      runSolve(curves());
+    }
+  }
+
+  function switchTarget() {
+    const shown = curves();
+    if (shown.length < 2 || !solving) return;
+    solving.target = nextShown(shown, solving.target).i;
+    solving.index = 0;
+    if (solving.kind === "integral" && solving.b === null) return renderGraph();
+    runSolve(shown);
+  }
+
+  const SOLVE_NAMES = { root: "Root", min: "Min", max: "Max", isect: "Intersection" };
+
+  // One line above the trace: what was found, on which curve. Tap the
+  // curve's name to switch to another function.
+  function renderSolve(shown) {
+    gsolvEl.querySelectorAll("[data-solve]").forEach((btn) => {
+      btn.setAttribute("aria-pressed", solving?.kind === btn.dataset.solve);
+    });
+    solveResultEl.hidden = !solving;
+    if (!solving) return;
+    const target = shown.find((c) => c.i === solving.target);
+    const name = (c) => {
+      const el = span("", "trace-item");
+      const dot = span("", "dot");
+      dot.style.setProperty("--fn-color", seriesColor(c.i));
+      el.append(dot, `y${c.i + 1}`);
+      return el;
+    };
+    const parts = [];
+    if (target) {
+      const chooser = document.createElement("button");
+      chooser.className = "solve-target";
+      chooser.title = "Switch function";
+      chooser.append(name(target));
+      if (solving.kind === "isect" && shown.length > 1) {
+        chooser.append(" ∩ ", name(nextShown(shown, target.i)));
+      }
+      parts.push(chooser);
+    }
+    if (solving.message || !target) {
+      parts.push(span(solving.message || "Enter or show a function first", "solve-note"));
+    } else if (solving.kind === "integral") {
+      if (solving.a === null) parts.push(span("∫dx: tap the lower limit", "solve-note"));
+      else if (solving.b === null) {
+        parts.push(span(`∫dx from ${G.label(solving.a)}: tap the upper limit`, "solve-note"));
+      } else {
+        const value = Number.isFinite(solving.value) ? G.label(solving.value) : "Math Error";
+        parts.push(
+          span(`∫ from ${G.label(solving.a)} to ${G.label(solving.b)} = `),
+          span(value, "val")
+        );
+      }
+    } else {
+      const y = target.f(traceX);
+      const { xs, ys } = viewSpans();
+      parts.push(
+        span(`${SOLVE_NAMES[solving.kind]}: x = `),
+        span(tidy(traceX, xs), "val"),
+        span(", y = "),
+        span(Number.isFinite(y) ? tidy(y, ys) : "—", "val")
+      );
+      if (solving.found > 1) {
+        parts.push(span(`${solving.index + 1} of ${solving.found}, tap again for the next`, "solve-note"));
+      }
+    }
+    const close = document.createElement("button");
+    close.className = "solve-close";
+    close.setAttribute("aria-label", "Close");
+    close.textContent = "×";
+    parts.push(close);
+    solveResultEl.replaceChildren(...parts);
+  }
+
+  gsolvEl.addEventListener("click", (event) => {
+    const btn = event.target.closest("[data-solve]");
+    if (btn) startSolve(btn.dataset.solve);
+  });
+
+  solveResultEl.addEventListener("click", (event) => {
+    if (event.target.closest(".solve-close")) {
+      solving = null;
+      renderGraph();
+    } else if (event.target.closest(".solve-target")) switchTarget();
+  });
+
   // Arrow keys move the trace line one pixel's worth; + and − zoom.
   function graphKey(key) {
     const { width, height } = size();
@@ -665,7 +850,10 @@
       scheduleDraw();
     } else if (key === "+") zoomCentre(0.5);
     else if (key === "-") zoomCentre(2);
-    else return false;
+    else if (key === "Escape" && solving) {
+      solving = null;
+      renderGraph();
+    } else return false;
     return true;
   }
 
@@ -764,7 +952,7 @@
     l: '[data-insert="log("]',
     n: '[data-insert="ln("]',
   };
-  const letters = { r: "√(", p: "π", e: "e", a: "Ans" };
+  const letters = { r: "√(", p: "π", e: "e", a: "Ans", x: "x", i: "∫(", d: "d/dx(" };
   // Shift+A…F types a memory letter.
   for (const name of C.VARIABLES) letters[name] = name;
 
@@ -786,9 +974,8 @@
       if (graphKey(key)) event.preventDefault();
       return;
     }
-    if (key === "x" && editing !== null) handle("insert", "x");
-    else if (typed.has(key)) handle("insert", key);
-    else if (key === ",") handle("insert", ".");
+    if (typed.has(key)) handle("insert", key);
+    else if (key === ",") handle("insert", event.code === "NumpadDecimal" ? "." : ",");
     else if (key === "Enter" || key === "=") handle("equals");
     else if (key === "Backspace") handle("backspace");
     else if (key === "ArrowLeft") handle("cursor", -1);

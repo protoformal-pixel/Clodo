@@ -8,6 +8,9 @@
 (function (root) {
   "use strict";
 
+  const Calculus =
+    typeof module !== "undefined" && module.exports ? require("./calculus.js") : root.Calculus;
+
   // ---------------------------------------------------------------------
   // Maths helpers
 
@@ -75,6 +78,13 @@
     "Abs(": Math.abs,
   };
 
+  // Calculus, Casio style, with x as the variable and commas between values:
+  //   ∫(x², 0, 3)      area under x² from 0 to 3
+  //   d/dx(x³, 2)      slope of x³ at x = 2
+  //   Solve(x²−2, 1)   the x where x²−2 = 0, searching from 1 (default 0)
+  // The number of values each one takes:
+  const CALCULUS = { "∫(": [3], "d/dx(": [2], "Solve(": [1, 2] };
+
   // Written after the number they act on: 3², 5!, 4⁻¹, 50%.
   const POSTFIX = {
     "²": (x) => x * x,
@@ -128,6 +138,7 @@
   //   power    = postfix (("^" | "ʸ√") unary)?        right to left: 2^3^2
   //   postfix  = primary ("²" | "!" | "⁻¹" | "%")*
   //   primary  = number | π | e | Ans | A–F | x | "(" sum ")" | function sum ")"
+  //            | calculus sum ("," sum)* ")"
   //
   // Missing closing brackets at the very end are added, as on a Casio.
 
@@ -167,6 +178,7 @@
       (typeof item === "object" ||
         item in CONSTANTS ||
         item in FUNCTIONS ||
+        item in CALCULUS ||
         item === "Ans" ||
         VARIABLES.includes(item) ||
         item === "x" ||
@@ -195,6 +207,16 @@
         const arg = sum();
         closeBracket();
         return { type: "fn", name: item, arg };
+      }
+      if (item in CALCULUS) {
+        const args = [sum()];
+        while (peek() === ",") {
+          pos++;
+          args.push(sum());
+        }
+        closeBracket();
+        if (!CALCULUS[item].includes(args.length)) throw syntaxError();
+        return { type: "calculus", name: item, args };
       }
       throw syntaxError();
     }
@@ -288,10 +310,38 @@
       case "bin":
         value = BINARY[node.op](evaluate(node.left, env), evaluate(node.right, env));
         break;
+      case "calculus":
+        value = calculus(node, env);
+        break;
     }
     // Division by zero, √(−1), log(0), tan(90°)… stop here.
     if (!Number.isFinite(value)) throw mathError();
     return value;
+  }
+
+  // The first value is a function of x; the others are worked out as usual
+  // (so the limits of an integral can use an outer x when graphing).
+  function calculus(node, env) {
+    const [body, ...rest] = node.args;
+    const f = (x) => {
+      try {
+        return evaluate(body, { ...env, x });
+      } catch {
+        return NaN; // undefined at this x
+      }
+    };
+    const values = rest.map((arg) => evaluate(arg, env));
+    switch (node.name) {
+      case "∫(":
+        return Calculus.integrate(f, values[0], values[1]);
+      case "d/dx(":
+        return Calculus.derivative(f, values[0]);
+      case "Solve(": {
+        const x = Calculus.solve(f, values.length ? values[0] : 0);
+        if (Number.isNaN(x)) throw { calcError: "Can't Solve" };
+        return x;
+      }
+    }
   }
 
   function calculate(tokens, env) {
