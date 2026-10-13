@@ -338,3 +338,64 @@ button:focus-visible {
   height: 40px;
   font-size: 0.95rem;
 }
+
+.memory {
+  margin-top: 10px;
+}
+
+.memory-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.memory .link {
+  padding: 2px 6px;
+  background: none;
+  color: var(--op);
+  font-size: 0.85rem;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.memory-keys {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+
+.memory-keys button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  height: 44px;
+  padding: 0 2px;
+  border-radius: 12px;
+  line-height: 1.1;
+}
+
+.var-name {
+  font-weight: 600;
+}
+
+.var-value {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 0.65rem;
+}
+
+/* While STO waits for a letter, the letters are highlighted. */
+.sci.is-storing [data-var] {
+  box-shadow: inset 0 0 0 2px var(--op);
+}
