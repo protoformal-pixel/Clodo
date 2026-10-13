@@ -6,6 +6,7 @@
   const displayEl = document.getElementById("display");
   const backspaceBtn = document.getElementById("backspace");
   const expressionEl = document.getElementById("expression");
+  const previewEl = document.getElementById("preview");
   const modeEl = document.getElementById("mode");
   const sciEl = document.getElementById("sci");
   const sciToggle = document.getElementById("sci-toggle");
@@ -55,7 +56,7 @@
     };
   }
 
-  // Internal tokens such as "*" and "root" shown as their key symbols.
+  // History saved by earlier versions used " * " style text.
   function prettify(expression) {
     return expression.replace(
       / (\+|-|\*|\/|\^|root) /g,
@@ -63,13 +64,16 @@
     );
   }
 
-  // With Inv on, keys such as sin act as their inverse (sin⁻¹).
-  function fnOf(btn) {
-    return (inverse && btn.dataset.invFn) || btn.dataset.fn;
+  // With Inv on, keys such as sin type their inverse (sin⁻¹).
+  function tokenOf(btn) {
+    return (inverse && btn.dataset.invInsert) || btn.dataset.insert;
   }
 
-  function operatorOf(btn) {
-    return (inverse && btn.dataset.invOperator) || btn.dataset.operator;
+  function span(text, className) {
+    const el = document.createElement("span");
+    el.textContent = text;
+    if (className) el.className = className;
+    return el;
   }
 
   function renderHistory() {
@@ -113,51 +117,52 @@
       : "";
   }
 
+  // Shrink long text so it stays on one line, down to half size.
+  function fit(el, length) {
+    el.style.fontSize = length > 10 ? `${Math.max(1.5, (3 * 10) / length)}rem` : "";
+  }
+
   function render() {
-    // One span per character, so a tap can tell which digits it fell between.
-    const chars = [...state.display].map((ch, i) => {
-      const span = document.createElement("span");
-      span.textContent = ch;
-      span.dataset.index = i;
-      return span;
-    });
-    if (state.cursor !== null) {
-      const caret = document.createElement("span");
-      caret.className = "caret";
-      chars.splice(state.cursor, 0, caret);
+    if (state.result !== null) {
+      // After "=": the expression above, the answer big.
+      expressionEl.textContent = state.resultExpression + " =";
+      displayEl.replaceChildren(span(state.result));
+      displayEl.classList.add("is-result");
+      fit(displayEl, state.result.length);
+      previewEl.textContent = "";
+      previewEl.classList.remove("is-error");
+      return;
     }
-    displayEl.replaceChildren(...chars);
-    // Shrink long numbers such as π so they stay on one line.
-    const length = state.display.length;
-    displayEl.style.fontSize =
-      length > 10 ? `${Math.max(1.5, (3 * 10) / length)}rem` : "";
-    const tokens = state.label ? [...state.chain, state.label] : state.chain;
-    expressionEl.textContent = prettify(tokens.join(" ") + " ");
-    const pending = state.operatorPending && state.ops[state.ops.length - 1];
-    document.querySelectorAll("[data-operator]").forEach((btn) => {
-      btn.classList.toggle("active", pending === operatorOf(btn));
+
+    // Typing: one span per token, so a tap can tell where it landed.
+    expressionEl.textContent = "";
+    displayEl.classList.remove("is-result");
+    const parts = state.tokens.map((token, i) => {
+      const el = span(C.tokenText(token));
+      el.dataset.index = i;
+      return el;
     });
+    if (parts.length) {
+      const at = state.cursor === null ? parts.length : state.cursor;
+      parts.splice(at, 0, span("", "caret"));
+    } else {
+      parts.push(span("0", "placeholder"));
+    }
+    displayEl.replaceChildren(...parts);
+    fit(displayEl, C.toText(state.tokens).length);
+
+    const preview = C.preview(state, settings.angle);
+    previewEl.textContent = state.error || (preview === null ? "" : "= " + preview);
+    previewEl.classList.toggle("is-error", Boolean(state.error));
   }
 
   function handle(action, value) {
     switch (action) {
-      case "digit":
-        state = C.inputDigit(state, value);
-        break;
-      case "operator":
-        state = C.setOperator(state, value);
-        break;
-      case "function":
-        state = C.applyFunction(state, value, settings.angle);
-        break;
-      case "constant":
-        state = C.insertConstant(state, value);
-        break;
-      case "decimal":
-        state = C.inputDecimal(state);
+      case "insert":
+        state = C.insert(state, value);
         break;
       case "equals":
-        state = C.equals(state);
+        state = C.equals(state, settings.angle);
         if (state.completed) {
           history = C.addToHistory(history, state.completed);
           save(HISTORY_KEY, history);
@@ -165,13 +170,7 @@
         }
         break;
       case "clear":
-        state = C.clear();
-        break;
-      case "sign":
-        state = C.toggleSign(state);
-        break;
-      case "percent":
-        state = C.percent(state);
+        state = C.clear(state);
         break;
       case "backspace":
         state = C.backspace(state);
@@ -179,20 +178,19 @@
       case "cursor":
         state = C.moveCursor(state, value);
         break;
+      case "setCursor":
+        state = C.setCursor(state, value);
+        break;
       case "recall":
-        state = C.recall(value);
+        state = C.insertNumber(state, value);
         break;
     }
     render();
   }
 
   function pressKey(btn) {
-    const { dataset } = btn;
-    if (dataset.digit) handle("digit", dataset.digit);
-    else if (dataset.operator) handle("operator", operatorOf(btn));
-    else if (dataset.fn) handle("function", fnOf(btn));
-    else if (dataset.constant) handle("constant", dataset.constant);
-    else if (dataset.action) handle(dataset.action);
+    if (btn.dataset.insert) handle("insert", tokenOf(btn));
+    else if (btn.dataset.action) handle(btn.dataset.action);
   }
 
   document.querySelector(".keys").addEventListener("click", (event) => {
@@ -202,22 +200,23 @@
 
   backspaceBtn.addEventListener("click", () => handle("backspace"));
 
-  // Tap between two digits to type or delete there.
+  // Tap between two tokens to type or delete there. Tapping an answer goes
+  // back to its expression.
   displayEl.addEventListener("click", (event) => {
-    const span = event.target.closest("[data-index]");
+    if (state.result !== null) return handle("cursor", 0);
+    const el = event.target.closest("[data-index]");
     let index;
-    if (span) {
-      const box = span.getBoundingClientRect();
+    if (el) {
+      const box = el.getBoundingClientRect();
       const rightHalf = event.clientX > box.left + box.width / 2;
-      index = Number(span.dataset.index) + (rightHalf ? 1 : 0);
+      index = Number(el.dataset.index) + (rightHalf ? 1 : 0);
     } else {
-      // Empty space: left of the number means its start, otherwise its end.
+      // Empty space: left of the expression means its start, otherwise its end.
       const first = displayEl.querySelector("[data-index]");
       const left = first && event.clientX < first.getBoundingClientRect().left;
-      index = left ? 0 : state.display.length;
+      index = left ? 0 : state.tokens.length;
     }
-    state = C.setCursor(state, index);
-    render();
+    handle("setCursor", index);
   });
 
   sciEl.addEventListener("click", (event) => {
@@ -258,33 +257,31 @@
     renderHistory();
   });
 
+  // Keys typed as-is.
+  const typed = new Set([..."0123456789.+-*/^()!%"]);
   // Letter shortcuts for scientific keys; they follow Inv like the buttons.
   const shortcuts = {
-    s: '[data-fn="sin"]',
-    c: '[data-fn="cos"]',
-    t: '[data-fn="tan"]',
-    l: '[data-fn="log"]',
-    n: '[data-fn="ln"]',
-    "^": '[data-operator="^"]',
-    "!": '[data-fn="factorial"]',
-    p: '[data-constant="pi"]',
+    s: '[data-insert="sin("]',
+    c: '[data-insert="cos("]',
+    t: '[data-insert="tan("]',
+    l: '[data-insert="log("]',
+    n: '[data-insert="ln("]',
   };
+  const letters = { r: "√(", p: "π", e: "e", a: "Ans" };
 
   document.addEventListener("keydown", (event) => {
     // Leave browser shortcuts such as Ctrl+C alone.
     if (event.ctrlKey || event.metaKey || event.altKey) return;
     const { key } = event;
-    if (/^[0-9]$/.test(key)) handle("digit", key);
-    else if (["+", "-", "*", "/"].includes(key)) handle("operator", key);
-    else if (key === "." || key === ",") handle("decimal");
+    if (typed.has(key)) handle("insert", key);
+    else if (key === ",") handle("insert", ".");
     else if (key === "Enter" || key === "=") handle("equals");
     else if (key === "Backspace") handle("backspace");
     else if (key === "ArrowLeft") handle("cursor", -1);
     else if (key === "ArrowRight") handle("cursor", 1);
     else if (key === "Escape") handle("clear");
-    else if (key === "%") handle("percent");
-    else if (key === "r") handle("function", "sqrt");
     else if (key === "h") historyToggle.click();
+    else if (letters[key]) handle("insert", letters[key]);
     else if (shortcuts[key]) pressKey(document.querySelector(shortcuts[key]));
     else return;
     event.preventDefault();

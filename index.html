@@ -27,6 +27,7 @@
       <div class="expression" id="expression" aria-hidden="true"></div>
       <output class="display" id="display" aria-live="polite">0</output>
       <div class="edit-row">
+        <span id="preview" class="preview" aria-live="polite"></span>
         <button id="backspace" class="backspace" aria-label="Delete" title="Delete">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M9 5h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-6-7z" />
@@ -43,56 +44,59 @@
           <button id="inv" aria-pressed="false" title="Inverse functions">
             Inv
           </button>
-          <button data-fn="sin" data-inv-fn="asin" data-inv-label="sin⁻¹">
+          <button data-insert="sin(" data-inv-insert="sin⁻¹(" data-inv-label="sin⁻¹">
             sin
           </button>
-          <button data-fn="cos" data-inv-fn="acos" data-inv-label="cos⁻¹">
+          <button data-insert="cos(" data-inv-insert="cos⁻¹(" data-inv-label="cos⁻¹">
             cos
           </button>
-          <button data-fn="tan" data-inv-fn="atan" data-inv-label="tan⁻¹">
+          <button data-insert="tan(" data-inv-insert="tan⁻¹(" data-inv-label="tan⁻¹">
             tan
           </button>
 
-          <button data-fn="square" data-inv-fn="sqrt" data-inv-label="√x">
-            x²
-          </button>
-          <button data-operator="^" data-inv-operator="root" data-inv-label="ʸ√x">
+          <button data-insert="²" data-inv-insert="√(" data-inv-label="√">x²</button>
+          <button data-insert="^" data-inv-insert="root" data-inv-label="ʸ√x">
             xʸ
           </button>
-          <button data-fn="ln" data-inv-fn="exp" data-inv-label="eˣ">ln</button>
-          <button data-fn="log" data-inv-fn="pow10" data-inv-label="10ˣ">
+          <button data-insert="ln(" data-inv-insert="e^(" data-inv-label="eˣ">ln</button>
+          <button data-insert="log(" data-inv-insert="10^(" data-inv-label="10ˣ">
             log
           </button>
 
-          <button data-fn="reciprocal">1/x</button>
-          <button data-fn="factorial">n!</button>
-          <button data-constant="pi">π</button>
-          <button data-constant="e">e</button>
+          <button data-insert="⁻¹">x⁻¹</button>
+          <button data-insert="!">n!</button>
+          <button data-insert="π">π</button>
+          <button data-insert="e">e</button>
+
+          <button data-insert="neg" title="Negative number">(−)</button>
+          <button data-insert="%">%</button>
+          <button data-insert="Abs(" title="Absolute value">|x|</button>
+          <button data-insert="Ans" title="Last answer">Ans</button>
         </div>
       </div>
       <div class="keys">
         <button data-action="clear" class="fn">AC</button>
-        <button data-action="sign" class="fn">±</button>
-        <button data-action="percent" class="fn">%</button>
-        <button data-operator="/" class="op" aria-label="divide">÷</button>
+        <button data-insert="(" class="fn">(</button>
+        <button data-insert=")" class="fn">)</button>
+        <button data-insert="/" class="op" aria-label="divide">÷</button>
 
-        <button data-digit="7">7</button>
-        <button data-digit="8">8</button>
-        <button data-digit="9">9</button>
-        <button data-operator="*" class="op" aria-label="multiply">×</button>
+        <button data-insert="7">7</button>
+        <button data-insert="8">8</button>
+        <button data-insert="9">9</button>
+        <button data-insert="*" class="op" aria-label="multiply">×</button>
 
-        <button data-digit="4">4</button>
-        <button data-digit="5">5</button>
-        <button data-digit="6">6</button>
-        <button data-operator="-" class="op" aria-label="subtract">−</button>
+        <button data-insert="4">4</button>
+        <button data-insert="5">5</button>
+        <button data-insert="6">6</button>
+        <button data-insert="-" class="op" aria-label="subtract">−</button>
 
-        <button data-digit="1">1</button>
-        <button data-digit="2">2</button>
-        <button data-digit="3">3</button>
-        <button data-operator="+" class="op" aria-label="add">+</button>
+        <button data-insert="1">1</button>
+        <button data-insert="2">2</button>
+        <button data-insert="3">3</button>
+        <button data-insert="+" class="op" aria-label="add">+</button>
 
-        <button data-digit="0" class="wide">0</button>
-        <button data-action="decimal">.</button>
+        <button data-insert="0" class="wide">0</button>
+        <button data-insert=".">.</button>
         <button data-action="equals" class="op">=</button>
       </div>
       <section class="history" id="history" aria-label="History" hidden>
